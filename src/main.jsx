@@ -1,41 +1,317 @@
-import React,{useEffect,useMemo,useState}from"react";
+import React,{useEffect,useMemo,useRef,useState}from"react";
 import{createRoot}from"react-dom/client";
-import{BookOpen,Brain,ChevronRight,Clock3,FileText,History,Home as HomeIcon,ListChecks,Plus,Search,Sparkles,Target,Trash2,Upload,X}from"lucide-react";
+import{BookOpen,Brain,ChevronLeft,ChevronRight,Clock3,FileText,History,Home as HomeIcon,ListChecks,Minus,Plus,Search,Sparkles,Target,Trash2,Upload,X,Highlighter}from"lucide-react";
+import*as pdfjsLib from"pdfjs-dist";
 import"./styles.css";
-const demo={id:"demo",title:"Mitose — cours de démonstration",pages:[
+
+pdfjsLib.GlobalWorkerOptions.workerSrc=new URL("pdf.worker.min.mjs",import.meta.url).toString();
+
+const demo={id:"demo",title:"Mitose — cours de démonstration",kind:"demo",pages:[
 {id:"p1",n:1,text:"Le centrosome est le principal centre organisateur des microtubules. Il est constitué de deux centrioles disposés perpendiculairement, entourés de matériel péricentriolaire."},
 {id:"p2",n:2,text:"Aurora B participe au dispositif de contrôle des accrochages des kinétochores. La mise sous tension du centromère réduit l'activité de ce dispositif de contrôle."},
 {id:"p3",n:3,text:"Les microtubules du fuseau sont constitués de tubuline. Leur extrémité + présente une dynamique importante au cours de la mitose."}]};
+
 const levels=[["again","🔴","Pas du tout",10],["hard","🟠","Difficile",1440],["medium","🟡","Moyen",4320],["good","🟢","Bien acquis",10080],["perfect","🔵","Parfait",30240]];
 const load=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}};
-function App(){
-const[courses,setCourses]=useState(()=>load("rmed_courses",[demo])),[cards,setCards]=useState(()=>load("rmed_cards",[])),[history,setHistory]=useState(()=>load("rmed_history",[]));
-const[tab,setTab]=useState("home"),[course,setCourse]=useState(demo),[p,setP]=useState(demo.pages[0]),[sel,setSel]=useState(""),[edit,setEdit]=useState(false),[front,setFront]=useState(""),[back,setBack]=useState(""),[search,setSearch]=useState(""),[revealed,setRevealed]=useState(false),[ri,setRi]=useState(0),[qcm,setQcm]=useState(null);
-useEffect(()=>localStorage.setItem("rmed_courses",JSON.stringify(courses)),[courses]);useEffect(()=>localStorage.setItem("rmed_cards",JSON.stringify(cards)),[cards]);useEffect(()=>localStorage.setItem("rmed_history",JSON.stringify(history)),[history]);
-const due=useMemo(()=>cards.filter(c=>!c.next||c.next<=Date.now()),[cards,history]);const rc=due[ri];
-const nav=t=>{setTab(t);if(t==="review"){setRi(0);setRevealed(false)}};
-function open(c,pg=c.pages[0]){setCourse(c);setP(pg);setTab("course")}
-function importPdf(e){const f=e.target.files?.[0];if(!f)return;const c={id:crypto.randomUUID(),title:f.name.replace(/\.pdf$/i,""),pages:[{id:crypto.randomUUID(),n:1,text:"PDF importé : "+f.name+" — le lecteur PDF complet sera connecté dans la prochaine version."}]};setCourses(x=>[...x,c]);open(c)}
-function makeCard(){const s=sel.trim();setFront(s?"Que faut-il retenir sur « "+s.slice(0,100)+" » ?":"");setBack(s);setEdit(true)}
-function save(){if(!front.trim()||!back.trim())return;setCards(x=>[...x,{id:crypto.randomUUID(),courseId:course.id,pageId:p.id,page:p.n,source:sel||back,front:front.trim(),back:back.trim(),level:null,next:Date.now(),created:Date.now()}]);setEdit(false);setSel("")}
-function rate(l){if(!rc)return;const days=levels.find(x=>x[0]===l)[3];setCards(x=>x.map(c=>c.id===rc.id?{...c,level:l,next:Date.now()+days*60000,last:Date.now()}:c));setHistory(x=>[{id:crypto.randomUUID(),card:rc.front,level:l,date:Date.now()},...x]);setRevealed(false);setRi(i=>i+1)}
-return <div className="app"><aside><div className="logo">R</div><h2>RMed</h2><small>PASS • révision active</small><Nav icon={<HomeIcon/>} t="Accueil" a={tab==="home"} f={()=>nav("home")}/><Nav icon={<BookOpen/>} t="Cours" a={tab==="course"} f={()=>nav("course")}/><Nav icon={<Brain/>} t="Flashcards" a={tab==="cards"} f={()=>nav("cards")}/><Nav icon={<Target/>} t="Réviser" a={tab==="review"} f={()=>nav("review")}/><Nav icon={<ListChecks/>} t="QCM" a={tab==="qcm"} f={()=>nav("qcm")}/><Nav icon={<History/>} t="Historique" a={tab==="history"} f={()=>nav("history")}/><div className="dog">🐶<span>Ton compagnon est prêt.</span></div></aside>
-<main><header><b className="mobile">RMed</b><div className="search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher…"/></div><div className="avatar">R</div></header>
-{tab==="home"&&<Home cards={cards} due={due.length} courses={courses} nav={nav} open={open}/>}
-{tab==="course"&&<Course course={course} p={p} setP={setP} sel={sel} setSel={setSel} make={makeCard} importPdf={importPdf} courses={courses} open={open}/>}
-{tab==="cards"&&<Cards cards={cards} search={search} open={(c)=>{const co=courses.find(x=>x.id===c.courseId);const pg=co?.pages.find(x=>x.id===c.pageId)||co?.pages[0];if(co)open(co,pg)}} del={id=>setCards(x=>x.filter(c=>c.id!==id))}/>}
-{tab==="review"&&<Review rc={rc} revealed={revealed} setRevealed={setRevealed} rate={rate} total={due.length} i={ri}/>}
-{tab==="qcm"&&<QCM cards={cards} qcm={qcm} setQcm={setQcm}/>}
-{tab==="history"&&<HistoryPage h={history}/>}</main>
-{edit&&<div className="overlay"><div className="modal"><div className="mh"><h2>Créer ma flashcard</h2><button onClick={()=>setEdit(false)}><X/></button></div><label>Question<input value={front} onChange={e=>setFront(e.target.value)}/></label><label>Réponse<textarea rows="4" value={back} onChange={e=>setBack(e.target.value)}/></label><div className="source"><b>Source exacte</b><p>« {sel||back} »</p><small>{course.title} • page {p.n}</small></div><div className="ai"><Sparkles size={18}/><span>L’IA pourra ensuite proposer une meilleure formulation sans remplacer ton choix.</span></div><div className="actions"><button onClick={()=>setEdit(false)}>Annuler</button><button className="primary" onClick={save}>Créer la carte</button></div></div></div>}</div>
+const uid=()=>crypto.randomUUID?.()||String(Date.now())+Math.random().toString(16).slice(2);
+
+const dbPromise=typeof indexedDB==="undefined"?Promise.resolve(null):new Promise((resolve,reject)=>{
+ const req=indexedDB.open("rmed-files",1);
+ req.onupgradeneeded=()=>req.result.createObjectStore("pdfs");
+ req.onsuccess=()=>resolve(req.result);
+ req.onerror=()=>reject(req.error);
+});
+async function savePdf(id,data){
+ const db=await dbPromise;if(!db)return;
+ await new Promise((res,rej)=>{const tx=db.transaction("pdfs","readwrite");tx.objectStore("pdfs").put(data,id);tx.oncomplete=res;tx.onerror=()=>rej(tx.error)});
 }
+async function getPdf(id){
+ const db=await dbPromise;if(!db)return null;
+ return await new Promise((res,rej)=>{const tx=db.transaction("pdfs","readonly");const r=tx.objectStore("pdfs").get(id);r.onsuccess=()=>res(r.result||null);r.onerror=()=>rej(r.error)});
+}
+async function deletePdf(id){
+ const db=await dbPromise;if(!db)return;
+ await new Promise((res,rej)=>{const tx=db.transaction("pdfs","readwrite");tx.objectStore("pdfs").delete(id);tx.oncomplete=res;tx.onerror=()=>rej(tx.error)});
+}
+
+function App(){
+ const[courses,setCourses]=useState(()=>load("rmed_courses",[demo]));
+ const[cards,setCards]=useState(()=>load("rmed_cards",[]));
+ const[highlights,setHighlights]=useState(()=>load("rmed_highlights",[]));
+ const[history,setHistory]=useState(()=>load("rmed_history",[]));
+ const[tab,setTab]=useState("home");
+ const[course,setCourse]=useState(demo);
+ const[pageNumber,setPageNumber]=useState(1);
+ const[pdfDoc,setPdfDoc]=useState(null);
+ const[pdfLoading,setPdfLoading]=useState(false);
+ const[zoom,setZoom]=useState(1.25);
+ const[sel,setSel]=useState(null);
+ const[focusHighlightId,setFocusHighlightId]=useState(null);
+ const[search,setSearch]=useState("");
+ const[modal,setModal]=useState(false);
+ const[draft,setDraft]=useState(null);
+ const[suggestions,setSuggestions]=useState([]);
+ const[revealed,setRevealed]=useState(false);
+ const[ri,setRi]=useState(0);
+ const[qcm,setQcm]=useState(null);
+ const pdfCache=useRef(new Map());
+
+ useEffect(()=>localStorage.setItem("rmed_courses",JSON.stringify(courses)),[courses]);
+ useEffect(()=>localStorage.setItem("rmed_cards",JSON.stringify(cards)),[cards]);
+ useEffect(()=>localStorage.setItem("rmed_highlights",JSON.stringify(highlights)),[highlights]);
+ useEffect(()=>localStorage.setItem("rmed_history",JSON.stringify(history)),[history]);
+
+ const due=useMemo(()=>cards.filter(c=>!c.next||c.next<=Date.now()),[cards,history]);
+ const rc=due[ri];
+
+ async function loadPdf(c){
+   if(c.kind!=="pdf"){setPdfDoc(null);return}
+   setPdfLoading(true);
+   try{
+     if(pdfCache.current.has(c.id)){setPdfDoc(pdfCache.current.get(c.id));return}
+     const data=await getPdf(c.id);
+     if(!data){setPdfDoc(null);return}
+     const doc=await pdfjsLib.getDocument({data}).promise;
+     pdfCache.current.set(c.id,doc);
+     setPdfDoc(doc);
+   }catch(err){console.error(err);setPdfDoc(null)}
+   finally{setPdfLoading(false)}
+ }
+
+ async function open(c,pg=1,focus=null){
+   setCourse(c);setPageNumber(typeof pg==="number"?pg:1);setFocusHighlightId(focus);setSel(null);setTab("course");
+   if(c.kind==="pdf")await loadPdf(c);else setPdfDoc(null);
+ }
+
+ function nav(t){setTab(t);if(t==="review"){setRi(0);setRevealed(false)}}
+
+ async function importPdf(e){
+   const file=e.target.files?.[0];if(!file)return;
+   setPdfLoading(true);
+   try{
+     const buffer=await file.arrayBuffer();
+     const id=uid();
+     const doc=await pdfjsLib.getDocument({data:buffer}).promise;
+     const pages=Array.from({length:doc.numPages},(_,i)=>({id:uid(),n:i+1}));
+     const c={id,title:file.name.replace(/\.pdf$/i,""),kind:"pdf",pages,created:Date.now()};
+     await savePdf(id,buffer);
+     pdfCache.current.set(id,doc);
+     setCourses(x=>[...x,c]);
+     setCourse(c);setPageNumber(1);setPdfDoc(doc);setTab("course");
+   }catch(err){console.error(err);alert("Impossible d’ouvrir ce PDF.")}
+   finally{setPdfLoading(false);e.target.value=""}
+ }
+
+ function currentPage(){return course.pages.find(x=>x.n===pageNumber)||course.pages[0]}
+
+ function addHighlight(selection){
+   if(!selection?.text)return null;
+   const pg=currentPage();
+   const existing=highlights.find(h=>h.courseId===course.id&&h.pageId===pg.id&&h.text===selection.text);
+   if(existing)return existing.id;
+   const h={id:uid(),courseId:course.id,pageId:pg.id,page:pg.n,text:selection.text,rects:selection.rects||[],context:selection.context||selection.text,created:Date.now()};
+   setHighlights(x=>[...x,h]);
+   return h.id;
+ }
+
+ function makeSuggestions(selection){
+   const text=selection.text.trim();
+   const ctx=selection.context?.trim()||text;
+   const safeText=text.replace(/\s+/g," ").slice(0,180);
+   const clozeContext=ctx.includes(text)?ctx.replace(text,"{{"+text+"}}"):("Retrouve l’information manquante : {{"+text+"}}");
+   setSuggestions([
+     {type:"basic",icon:"❓",title:"Question → réponse",front:"Que faut-il retenir concernant « "+safeText+" » ?",back:text},
+     {type:"cloze",icon:"🧩",title:"Texte à trous",front:clozeContext,back:text},
+     {type:"concept",icon:"💡",title:"Concept → définition",front:"Qu’est-ce que « "+safeText+" » ?",back:text}
+   ]);
+ }
+
+ function onSelection(selection){
+   if(!selection?.text)return;
+   const hId=addHighlight(selection);
+   setSel({...selection,highlightId:hId});
+   makeSuggestions(selection);
+ }
+
+ function openCreator(selection=sel){
+   if(!selection)return;
+   const hId=selection.highlightId||addHighlight(selection);
+   const first=(suggestions[0])||{type:"basic",front:"Que faut-il retenir ?",back:selection.text};
+   setDraft({...first,highlightId:hId,source:selection.text,page:pageNumber});
+   setModal(true);
+ }
+
+ function applySuggestion(s){
+   setDraft({...s,highlightId:sel?.highlightId||addHighlight(sel),source:sel?.text||s.back,page:pageNumber});
+   setModal(true);
+ }
+
+ function saveCard(){
+   if(!draft?.front?.trim()||!draft?.back?.trim())return;
+   const hId=draft.highlightId;
+   setCards(x=>[...x,{
+     id:uid(),courseId:course.id,pageId:currentPage().id,page:pageNumber,highlightId:hId,
+     source:draft.source||draft.back,type:draft.type||"basic",front:draft.front.trim(),back:draft.back.trim(),
+     level:null,next:Date.now(),created:Date.now()
+   }]);
+   setModal(false);setDraft(null);setSuggestions([]);setSel(null);
+ }
+
+ function deleteCard(id){setCards(x=>x.filter(c=>c.id!==id))}
+ function rate(level){
+   if(!rc)return;
+   const mins=levels.find(x=>x[0]===level)[3];
+   setCards(x=>x.map(c=>c.id===rc.id?{...c,level,next:Date.now()+mins*60000,last:Date.now()}:c));
+   setHistory(x=>[{id:uid(),card:rc.front,level,date:Date.now()},...x]);
+   setRevealed(false);setRi(i=>i+1);
+ }
+
+ async function openCardSource(c){
+   const co=courses.find(x=>x.id===c.courseId);if(!co)return;
+   await open(co,c.page,c.highlightId);
+   requestAnimationFrame(()=>document.querySelector(".pdf-reader")?.scrollIntoView({behavior:"smooth",block:"center"}));
+ }
+
+ return <div className="app">
+  <aside>
+   <div className="logo">R</div><h2>RMed</h2><small>PASS • révision active</small>
+   <Nav icon={<HomeIcon/>} t="Accueil" a={tab==="home"} f={()=>nav("home")}/>
+   <Nav icon={<BookOpen/>} t="Cours" a={tab==="course"} f={()=>nav("course")}/>
+   <Nav icon={<Brain/>} t="Flashcards" a={tab==="cards"} f={()=>nav("cards")}/>
+   <Nav icon={<Target/>} t="Réviser" a={tab==="review"} f={()=>nav("review")}/>
+   <Nav icon={<ListChecks/>} t="QCM" a={tab==="qcm"} f={()=>nav("qcm")}/>
+   <Nav icon={<History/>} t="Historique" a={tab==="history"} f={()=>nav("history")}/>
+   <div className="dog">🐶<span>Ton compagnon est prêt.</span></div>
+  </aside>
+
+  <main>
+   <header><b className="mobile">RMed</b><div className="search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher…"/></div><div className="avatar">R</div></header>
+
+   {tab==="home"&&<Home cards={cards} due={due.length} courses={courses} nav={nav} open={open}/>}
+   {tab==="course"&&<Course course={course} pageNumber={pageNumber} setPageNumber={setPageNumber} pdfDoc={pdfDoc} pdfLoading={pdfLoading} zoom={zoom} setZoom={setZoom} sel={sel} suggestions={suggestions} onSelection={onSelection} openCreator={openCreator} applySuggestion={applySuggestion} highlights={highlights.filter(h=>h.courseId===course.id&&h.page===pageNumber)} focusHighlightId={focusHighlightId} clearFocus={()=>setFocusHighlightId(null)} importPdf={importPdf} courses={courses} open={open}/>}
+   {tab==="cards"&&<Cards cards={cards} search={search} open={openCardSource} del={deleteCard}/>}
+   {tab==="review"&&<Review rc={rc} revealed={revealed} setRevealed={setRevealed} rate={rate} total={due.length} i={ri}/>}
+   {tab==="qcm"&&<QCM cards={cards} qcm={qcm} setQcm={setQcm}/>}
+   {tab==="history"&&<HistoryPage h={history}/>}
+  </main>
+
+  {modal&&<CardModal draft={draft} setDraft={setDraft} suggestions={suggestions} onUse={applySuggestion} onClose={()=>{setModal(false);setDraft(null)}} onSave={saveCard}/>}
+ </div>
+}
+
 function Nav({icon,t,a,f}){return <button className={a?"nav active":"nav"} onClick={f}>{icon}<span>{t}</span></button>}
-function Home({cards,due,courses,nav,open}){return <div className="page"><section className="hero"><div><small>TON ESPACE DE RÉVISION</small><h1>Travaille ton cours au moment où tu le lis.</h1><p>Surligne → crée ta flashcard → relie-la au passage exact → révise.</p><button className="primary" onClick={()=>nav("course")}>Ouvrir un cours <ChevronRight/></button></div><div className="bigdog">🐶</div></section><div className="stats"><Stat n={courses.length} t="Cours"/><Stat n={cards.length} t="Flashcards"/><Stat n={due} t="À réviser"/><Stat n={cards.filter(c=>c.level==="perfect"||c.level==="good").length} t="Bien acquis"/></div><div className="grid"><section className="panel"><h3>Continuer</h3>{courses.map(c=><button className="course" key={c.id} onClick={()=>open(c)}><FileText/><div><b>{c.title}</b><small>{c.pages.length} page(s)</small></div><ChevronRight/></button>)}</section><section className="panel"><h3>Actions rapides</h3><div className="quick"><button onClick={()=>nav("review")}><Brain/>Réviser</button><button onClick={()=>nav("qcm")}><ListChecks/>Faire un QCM</button><button onClick={()=>nav("cards")}><Target/>Mes flashcards</button></div></section></div></div>}
+function Home({cards,due,courses,nav,open}){return <div className="page"><section className="hero"><div><small>TON ESPACE DE RÉVISION</small><h1>Travaille ton cours au moment où tu le lis.</h1><p>Surligne → crée ta flashcard → garde le lien vers le passage exact → révise.</p><button className="primary" onClick={()=>nav("course")}>Ouvrir un cours <ChevronRight/></button></div><div className="bigdog">🐶</div></section><div className="stats"><Stat n={courses.length} t="Cours"/><Stat n={cards.length} t="Flashcards"/><Stat n={due} t="À réviser"/><Stat n={cards.filter(c=>c.level==="perfect"||c.level==="good").length} t="Bien acquis"/></div><div className="grid"><section className="panel"><h3>Continuer</h3>{courses.map(c=><button className="course" key={c.id} onClick={()=>open(c)}><FileText/><div><b>{c.title}</b><small>{c.pages.length} page(s){c.kind==="pdf"?" • PDF réel":""}</small></div><ChevronRight/></button>)}</section><section className="panel"><h3>Actions rapides</h3><div className="quick"><button onClick={()=>nav("review")}><Brain/>Réviser</button><button onClick={()=>nav("qcm")}><ListChecks/>Faire un QCM</button><button onClick={()=>nav("cards")}><Target/>Mes flashcards</button></div></section></div></div>}
 function Stat({n,t}){return <div className="stat"><strong>{n}</strong><span>{t}</span></div>}
-function Course({course,p,setP,sel,setSel,make,importPdf,courses,open}){return <div className="page"><div className="title"><h1>Cours</h1><label className="upload"><Upload/>Importer un PDF<input type="file" accept=".pdf" onChange={importPdf}/></label></div><div className="reader"><aside className="courseSide">{courses.map(c=><button className={c.id===course.id?"selected":""} key={c.id} onClick={()=>open(c)}><FileText/>{c.title}</button>)}</aside><section><div className="tabs">{course.pages.map(pg=><button className={pg.id===p.id?"selected":""} key={pg.id} onClick={()=>setP(pg)}>Page {pg.n}</button>)}</div><article className="paper"><small>{course.title} • PAGE {p.n}</small><p onMouseUp={()=>{const s=window.getSelection()?.toString();if(s)setSel(s)}}>{p.text}</p><p className="hint">Sélectionne une information dans le texte. Ta sélection devient la source exacte de ta flashcard.</p>{sel&&<div className="selection"><span>« {sel} »</span><button className="primary" onClick={make}><Plus/>Créer une flashcard</button></div>}</article></section></div></div>}
-function Cards({cards,search,open,del}){const arr=cards.filter(c=>(c.front+" "+c.back).toLowerCase().includes(search.toLowerCase()));return <div className="page"><div className="title"><h1>Flashcards</h1><span>{cards.length} cartes</span></div>{arr.length?<div className="list">{arr.map(c=><div className="cardrow" key={c.id}><span className="emoji">{levels.find(x=>x[0]===c.level)?.[1]||"⚪"}</span><div><b>{c.front}</b><p>{c.back}</p><small>Page {c.page} • liée au cours</small></div><button onClick={()=>open(c)}>Voir source</button><button className="danger" onClick={()=>del(c.id)}><Trash2/></button></div>)}</div>:<Empty text="Aucune flashcard pour l’instant."/>}</div>}
-function Review({rc,revealed,setRevealed,rate,total,i}){if(!rc)return <div className="page empty"><Brain/><h2>Tout est à jour 🎉</h2><p>Aucune flashcard à réviser pour le moment.</p></div>;return <div className="page review"><div className="title"><div><small>RÉVISION ACTIVE</small><h1>Carte {Math.min(i+1,total)}/{total}</h1></div><span className="pill">5 niveaux de maîtrise</span></div><section className="reviewcard"><small>QUESTION</small><h2>{rc.front}</h2>{revealed?<><div className="answer">{rc.back}</div><p>Comment tu maîtrises cette carte ?</p><div className="levels">{levels.map(x=><button key={x[0]} onClick={()=>rate(x[0])}><span>{x[1]}</span><b>{x[2]}</b></button>)}</div></>:<button className="primary reveal" onClick={()=>setRevealed(true)}>Afficher la réponse</button>}</section></div>}
+
+function Course({course,pageNumber,setPageNumber,pdfDoc,pdfLoading,zoom,setZoom,sel,suggestions,onSelection,openCreator,applySuggestion,highlights,focusHighlightId,clearFocus,importPdf,courses,open}){
+ const pg=course.pages.find(x=>x.n===pageNumber)||course.pages[0];
+ const prev=()=>setPageNumber(Math.max(1,pageNumber-1));
+ const next=()=>setPageNumber(Math.min(course.pages.length,pageNumber+1));
+ return <div className="page"><div className="title"><div><small>LECTEUR DE COURS</small><h1>{course.title}</h1></div><label className="upload"><Upload/>Importer un PDF<input type="file" accept=".pdf" onChange={importPdf}/></label></div>
+ <div className="reader">
+  <aside className="courseSide"><b>Mes cours</b>{courses.map(c=><button className={c.id===course.id?"selected":""} key={c.id} onClick={()=>open(c)}><FileText/>{c.title}</button>)}</aside>
+  <section className="pdf-reader">
+   <div className="pdf-toolbar"><button onClick={prev} disabled={pageNumber<=1}><ChevronLeft/></button><span>Page <b>{pageNumber}</b> / {course.pages.length}</span><button onClick={next} disabled={pageNumber>=course.pages.length}><ChevronRight/></button><span className="spacer"/><button onClick={()=>setZoom(z=>Math.max(.75,z-.1))}><Minus/></button><span>{Math.round(zoom*100)}%</span><button onClick={()=>setZoom(z=>Math.min(2.5,z+.1))}><Plus/></button></div>
+   {pdfLoading&&<div className="pdf-state">Ouverture du PDF…</div>}
+   {course.kind==="pdf"&&pdfDoc?<PDFPage pdfDoc={pdfDoc} pageNumber={pageNumber} scale={zoom} highlights={highlights} focusHighlightId={focusHighlightId} clearFocus={clearFocus} onSelection={onSelection}/>:course.kind==="demo"?<DemoPage pg={pg} onSelection={onSelection}/>:<div className="pdf-state">PDF indisponible. Réimporte-le pour continuer.</div>}
+   {sel&&<SelectionBar sel={sel} suggestions={suggestions} onHighlight={()=>{}} onCreate={()=>openCreator(sel)} onUse={applySuggestion}/>}
+  </section>
+ </div></div>
+}
+
+function DemoPage({pg,onSelection}){
+ const ref=useRef(null);
+ function getSelection(){
+  const s=window.getSelection();if(!s||s.isCollapsed)return;
+  const t=s.toString().trim();if(!t||!ref.current.contains(s.anchorNode))return;
+  onSelection({text:t,rects:[],context:pg.text});
+  s.removeAllRanges();
+ }
+ return <div className="demo-paper" ref={ref} onMouseUp={getSelection} onTouchEnd={getSelection}><small>PAGE {pg.n}</small><p>{pg.text}</p><p className="hint">Sélectionne un passage comme dans un vrai PDF pour créer une carte.</p></div>
+}
+
+function PDFPage({pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus,onSelection}){
+ const pageRef=useRef(null),canvasRef=useRef(null),textRef=useRef(null),contextRef=useRef("");
+ const[height,setHeight]=useState(800);
+
+ useEffect(()=>{let cancelled=false;
+ async function render(){
+   const page=await pdfDoc.getPage(pageNumber);
+   const viewport=page.getViewport({scale});
+   const dpr=window.devicePixelRatio||1;
+   const canvas=canvasRef.current;if(!canvas)return;
+   canvas.width=Math.floor(viewport.width*dpr);canvas.height=Math.floor(viewport.height*dpr);
+   canvas.style.width=viewport.width+"px";canvas.style.height=viewport.height+"px";
+   const ctx=canvas.getContext("2d");
+   await page.render({canvasContext:ctx,viewport,transform:dpr!==1?[dpr,0,0,dpr,0,0]:null}).promise;
+   if(cancelled)return;
+   setHeight(viewport.height);
+   const text=await page.getTextContent();
+   if(cancelled)return;
+   contextRef.current=text.items.map(i=>i.str).join(" ");
+   const layer=textRef.current;layer.innerHTML="";
+   for(const item of text.items){
+     if(!item.str)continue;
+     const span=document.createElement("span");
+     const tx=pdfjsLib.Util.transform(viewport.transform,item.transform);
+     const fontHeight=Math.hypot(tx[2],tx[3]);
+     const angle=Math.atan2(tx[1],tx[0]);
+     span.textContent=item.str;
+     span.style.left=tx[4]+"px";span.style.top=(tx[5]-fontHeight)+"px";
+     span.style.fontSize=fontHeight+"px";span.style.fontFamily=item.fontName||"sans-serif";
+     span.style.transform="rotate("+angle+"rad)";
+     layer.appendChild(span);
+   }
+   requestAnimationFrame(()=>{if(focusHighlightId){const el=document.getElementById("hl-"+focusHighlightId);el?.scrollIntoView({behavior:"smooth",block:"center"});clearFocus()}});
+ }
+ render().catch(console.error);
+ return()=>{cancelled=true};
+ },[pdfDoc,pageNumber,scale]);
+
+ function select(){
+   const s=window.getSelection();if(!s||s.isCollapsed||!textRef.current)return;
+   if(!textRef.current.contains(s.anchorNode))return;
+   const t=s.toString().trim();if(!t)return;
+   const root=pageRef.current.getBoundingClientRect();
+   const rects=Array.from(s.getRangeAt(0).getClientRects()).map(r=>({x:r.left-root.left,y:r.top-root.top,width:r.width,height:r.height})).filter(r=>r.width>1&&r.height>1);
+   onSelection({text:t,rects,context:contextRef.current});
+   s.removeAllRanges();
+ }
+ return <div className="pdf-stage"><div className="pdf-page" ref={pageRef} style={{height}} onMouseUp={select} onTouchEnd={select}>
+   <canvas ref={canvasRef}/>
+   <div className="pdf-highlights">{highlights.map(h=><div key={h.id} id={"hl-"+h.id} className="highlight-group" onClick={()=>onSelection({text:h.text,rects:h.rects,context:h.context,highlightId:h.id})}>{h.rects.map((r,i)=><span key={i} style={{left:r.x,top:r.y,width:r.width,height:r.height}}/> )}</div>)}</div>
+   <div className="pdf-text" ref={textRef}/>
+ </div></div>
+}
+
+function SelectionBar({sel,suggestions,onCreate,onUse}){
+ return <div className="selection-bar"><div className="selection-main"><Highlighter size={17}/><b>Passage sélectionné</b><span>« {sel.text} »</span><button className="primary" onClick={onCreate}><Plus/>Créer une flashcard</button></div><div className="suggestions-inline">{suggestions.map(s=><button key={s.type} className="suggestion-mini" onClick={()=>onUse(s)}><span>{s.icon}</span><b>{s.title}</b></button>)}</div></div>
+}
+
+function Cards({cards,search,open,del}){
+ const arr=cards.filter(c=>(c.front+" "+c.back).toLowerCase().includes(search.toLowerCase()));
+ return <div className="page"><div className="title"><h1>Flashcards</h1><span>{cards.length} cartes</span></div>{arr.length?<div className="list">{arr.map(c=><div className="cardrow" key={c.id}><span className="emoji">{c.type==="cloze"?"🧩":c.type==="concept"?"💡":"❓"}</span><div><b>{c.front}</b><p>{c.back}</p><small>Page {c.page} • {c.type==="cloze"?"Texte à trous":c.type==="concept"?"Concept":"Question / réponse"} • passage lié</small></div><button onClick={()=>open(c)}>Voir source</button><button className="danger" onClick={()=>del(c.id)}><Trash2/></button></div>)}</div>:<Empty text="Aucune flashcard pour l’instant."/>}</div>
+}
+
+function CardModal({draft,setDraft,suggestions,onUse,onClose,onSave}){
+ return <div className="overlay"><div className="modal modal-large"><div className="mh"><div><small className="eyebrow">ASSISTANT DE FORMULATION</small><h2>Créer ma flashcard</h2></div><button onClick={onClose}><X/></button></div>
+ <div className="source"><b>Passage source</b><p>« {draft?.source} »</p><small>La carte reste reliée au PDF et à sa page.</small></div>
+ <div className="ai-title"><Sparkles size={18}/>3 formats possibles</div>
+ <div className="suggestion-grid">{suggestions.map(s=><button key={s.type} className={"suggestion-card "+(draft?.type===s.type?"chosen":"")} onClick={()=>setDraft({...s,highlightId:draft.highlightId,source:draft.source,page:draft.page})}><span className="suggestion-icon">{s.icon}</span><b>{s.title}</b><small>{s.front}</small><em>Utiliser ce format</em></button>)}</div>
+ <label>Question / recto<input value={draft?.front||""} onChange={e=>setDraft({...draft,front:e.target.value})}/></label>
+ <label>Réponse / verso<textarea rows="4" value={draft?.back||""} onChange={e=>setDraft({...draft,back:e.target.value})}/></label>
+ <div className="ai"><Sparkles size={18}/><span>Ces 3 formulations sont proposées automatiquement. La connexion à une vraie IA générative sera ajoutée côté serveur pour ne jamais exposer de clé API dans le navigateur.</span></div>
+ <div className="actions"><button onClick={onClose}>Annuler</button><button className="primary" onClick={onSave}>Créer la carte</button></div>
+ </div></div>
+}
+
+function Review({rc,revealed,setRevealed,rate,total,i}){
+ if(!rc)return <div className="page empty"><Brain/><h2>Tout est à jour 🎉</h2><p>Aucune flashcard à réviser pour le moment.</p></div>;
+ return <div className="page review"><div className="title"><div><small>RÉVISION ACTIVE</small><h1>Carte {Math.min(i+1,total)}/{total}</h1></div><span className="pill">5 niveaux de maîtrise</span></div><section className="reviewcard"><small>{rc.type==="cloze"?"TEXTE À TROUS":rc.type==="concept"?"CONCEPT":"QUESTION"}</small><h2>{rc.front}</h2>{revealed?<><div className="answer">{rc.back}</div><p>Comment tu maîtrises cette carte ?</p><div className="levels">{levels.map(x=><button key={x[0]} onClick={()=>rate(x[0])}><span>{x[1]}</span><b>{x[2]}</b></button>)}</div></>:<button className="primary reveal" onClick={()=>setRevealed(true)}>Afficher la réponse</button>}</section></div>
+}
+
 function QCM({cards,qcm,setQcm}){if(!qcm)return <div className="page empty"><ListChecks/><h2>QCM basé sur tes cartes</h2><p>Une question simple est générée à partir de ton contenu.</p><button className="primary" onClick={()=>setQcm(cards[0]?{q:cards[0].front,a:cards[0].back}:null)}>Commencer</button>{!cards.length&&<small>Crée d’abord une flashcard.</small>}</div>;return <div className="page"><div className="title"><h1>QCM</h1><button onClick={()=>setQcm(null)}>Quitter</button></div><section className="panel qcm"><small>QUESTION</small><h2>{qcm.q}</h2><button onClick={()=>alert("Réponse : "+qcm.a)}>Afficher la correction</button></section></div>}
 function HistoryPage({h}){return <div className="page"><div className="title"><h1>Historique</h1><span>{h.length} révisions</span></div>{h.length?<div className="list">{h.map(x=><div className="history" key={x.id}><span>{levels.find(l=>l[0]===x.level)?.[1]}</span><div><b>{x.card}</b><small>{new Date(x.date).toLocaleString("fr-FR")}</small></div></div>)}</div>:<Empty text="Ton historique apparaîtra ici."/>}</div>}
 function Empty({text}){return <div className="empty"><Clock3/><p>{text}</p></div>}
+function StatMini(){return null}
 createRoot(document.getElementById("root")).render(<App/>);
