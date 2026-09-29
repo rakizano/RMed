@@ -1,6 +1,6 @@
 import React,{useEffect,useMemo,useState}from"react";
 import{createRoot}from"react-dom/client";
-import{BookOpen,Brain,ChevronRight,Clock3,FileText,History,Home,ListChecks,Plus,Search,Sparkles,Target,Trash2,Upload,X}from"lucide-react";
+import{BookOpen,Brain,ChevronRight,Clock3,FileText,History,Home as HomeIcon,ListChecks,Plus,Search,Sparkles,Target,Trash2,Upload,X}from"lucide-react";
 import"./styles.css";
 const demo={id:"demo",title:"Mitose — cours de démonstration",pages:[
 {id:"p1",n:1,text:"Le centrosome est le principal centre organisateur des microtubules. Il est constitué de deux centrioles disposés perpendiculairement, entourés de matériel péricentriolaire."},
@@ -19,7 +19,7 @@ function importPdf(e){const f=e.target.files?.[0];if(!f)return;const c={id:crypt
 function makeCard(){const s=sel.trim();setFront(s?"Que faut-il retenir sur « "+s.slice(0,100)+" » ?":"");setBack(s);setEdit(true)}
 function save(){if(!front.trim()||!back.trim())return;setCards(x=>[...x,{id:crypto.randomUUID(),courseId:course.id,pageId:p.id,page:p.n,source:sel||back,front:front.trim(),back:back.trim(),level:null,next:Date.now(),created:Date.now()}]);setEdit(false);setSel("")}
 function rate(l){if(!rc)return;const days=levels.find(x=>x[0]===l)[3];setCards(x=>x.map(c=>c.id===rc.id?{...c,level:l,next:Date.now()+days*60000,last:Date.now()}:c));setHistory(x=>[{id:crypto.randomUUID(),card:rc.front,level:l,date:Date.now()},...x]);setRevealed(false);setRi(i=>i+1)}
-return <div className="app"><aside><div className="logo">R</div><h2>RMed</h2><small>PASS • révision active</small><Nav icon={<Home/>} t="Accueil" a={tab==="home"} f={()=>nav("home")}/><Nav icon={<BookOpen/>} t="Cours" a={tab==="course"} f={()=>nav("course")}/><Nav icon={<Brain/>} t="Flashcards" a={tab==="cards"} f={()=>nav("cards")}/><Nav icon={<Target/>} t="Réviser" a={tab==="review"} f={()=>nav("review")}/><Nav icon={<ListChecks/>} t="QCM" a={tab==="qcm"} f={()=>nav("qcm")}/><Nav icon={<History/>} t="Historique" a={tab==="history"} f={()=>nav("history")}/><div className="dog">🐶<span>Ton compagnon est prêt.</span></div></aside>
+return <div className="app"><aside><div className="logo">R</div><h2>RMed</h2><small>PASS • révision active</small><Nav icon={<HomeIcon/>} t="Accueil" a={tab==="home"} f={()=>nav("home")}/><Nav icon={<BookOpen/>} t="Cours" a={tab==="course"} f={()=>nav("course")}/><Nav icon={<Brain/>} t="Flashcards" a={tab==="cards"} f={()=>nav("cards")}/><Nav icon={<Target/>} t="Réviser" a={tab==="review"} f={()=>nav("review")}/><Nav icon={<ListChecks/>} t="QCM" a={tab==="qcm"} f={()=>nav("qcm")}/><Nav icon={<History/>} t="Historique" a={tab==="history"} f={()=>nav("history")}/><div className="dog">🐶<span>Ton compagnon est prêt.</span></div></aside>
 <main><header><b className="mobile">RMed</b><div className="search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher…"/></div><div className="avatar">R</div></header>
 {tab==="home"&&<Home cards={cards} due={due.length} courses={courses} nav={nav} open={open}/>}
 {tab==="course"&&<Course course={course} p={p} setP={setP} sel={sel} setSel={setSel} make={makeCard} importPdf={importPdf} courses={courses} open={open}/>}
