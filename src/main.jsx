@@ -2,9 +2,10 @@ import React,{useEffect,useMemo,useRef,useState}from"react";
 import{createRoot}from"react-dom/client";
 import{BookOpen,Brain,ChevronLeft,ChevronRight,Clock3,FileText,History,Home as HomeIcon,ListChecks,Minus,Plus,Search,Sparkles,Target,Trash2,Upload,X,Highlighter}from"lucide-react";
 import*as pdfjsLib from"pdfjs-dist";
+import workerUrl from"pdfjs-dist/build/pdf.worker.min.mjs?url";
 import"./styles.css";
 
-pdfjsLib.GlobalWorkerOptions.workerSrc=new URL("pdf.worker.min.mjs",import.meta.url).toString();
+pdfjsLib.GlobalWorkerOptions.workerSrc=workerUrl;
 
 const demo={id:"demo",title:"Mitose — cours de démonstration",kind:"demo",pages:[
 {id:"p1",n:1,text:"Le centrosome est le principal centre organisateur des microtubules. Il est constitué de deux centrioles disposés perpendiculairement, entourés de matériel péricentriolaire."},
