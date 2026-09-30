@@ -130,7 +130,7 @@ export default async function handler(req,res){
       ok:true,
       service:"RMed IA",
       provider:process.env.GEMINI_API_KEY?"gemini":"none",
-      model:process.env.RMED_GEMINI_MODEL||"gemini-2.5-pro"
+      model:process.env.RMED_GEMINI_MODEL||"gemini-3.6-flash"
     });
   }
 
@@ -160,7 +160,7 @@ export default async function handler(req,res){
       return json(res,500,{error:"RMed IA n’est pas encore connecté à Gemini. Ajoute GEMINI_API_KEY au backend Vercel pour activer l’IA gratuite."});
     }
 
-    const models=[process.env.RMED_GEMINI_MODEL||"gemini-2.5-pro","gemini-2.5-flash"].filter((m,i,a)=>m&&a.indexOf(m)===i);
+    const models=[process.env.RMED_GEMINI_MODEL||"gemini-3.6-flash","gemini-3.5-flash"].filter((m,i,a)=>m&&a.indexOf(m)===i);
     let lastError=null;
 
     for(const model of models){
