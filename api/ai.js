@@ -1,7 +1,5 @@
-const allowedOrigin = process.env.RMED_ALLOWED_ORIGIN || "https://rakizano.github.io";
-
 function cors(res){
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Origin","*");
   res.setHeader("Vary","Origin");
   res.setHeader("Access-Control-Allow-Methods","POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers","Content-Type");
@@ -14,17 +12,6 @@ function textFromGemini(data){
     .map(part=>part?.text||"")
     .join("\n")
     .trim();
-}
-
-function outputText(data){
-  if(typeof data?.output_text==="string")return data.output_text;
-  const parts=[];
-  for(const item of data?.output||[]){
-    for(const part of item?.content||[]){
-      if(part?.type==="output_text"&&typeof part.text==="string")parts.push(part.text);
-    }
-  }
-  return parts.join("\n").trim();
 }
 
 const jsonSchemas={
@@ -77,8 +64,7 @@ function buildInstructions(action){
 À partir UNIQUEMENT du passage fourni, crée une flashcard utile.
 Le recto doit tester le rappel du concept, pas recopier le cours.
 Le verso doit être précis et mémorisable.
-N'invente aucune information absente du passage.
-`;
+N'invente aucune information absente du passage.`;
   }
   if(action==="qcm_session"){
     return `Tu es RMed, professeur de PASS et créateur de QCM.
@@ -86,21 +72,19 @@ Crée EXACTEMENT 30 questions à partir UNIQUEMENT des ressources fournies.
 Chaque question possède EXACTEMENT 3 propositions et UNE seule bonne réponse.
 Les pièges doivent être fins mais entièrement justifiables par les ressources.
 Couvre largement les notions présentes : définitions, mécanismes, localisations, étapes, chiffres, exceptions et vocabulaire.
-Pour chaque question, l'explication doit enseigner : pourquoi la bonne réponse est correcte et quel piège il fallait éviter.
-N'utilise aucune connaissance extérieure.
-`;
+Pour chaque question, l'explication doit enseigner pourquoi la bonne réponse est correcte et quel piège il fallait éviter.
+N'utilise aucune connaissance extérieure.`;
   }
   if(action==="explain_error"){
     return `Tu es RMed, professeur particulier de PASS.
 L'étudiant vient de faire une erreur ou indique qu'il ne comprend pas.
 Ton objectif n'est PAS de répéter le cours.
-1) Identifie la confusion ou le point de blocage probable.
-2) Explique le concept avec des mots différents du cours.
-3) Utilise une analogie ou une image mentale si cela aide, en signalant clairement qu'il s'agit d'une analogie.
-4) Reviens ensuite au vocabulaire exact du PASS.
-5) Termine par une phrase "À retenir".
-Reste fidèle aux ressources fournies. Ne crée aucun fait nouveau.
-`;
+Identifie la confusion ou le point de blocage probable.
+Explique ensuite le concept avec des mots différents du cours.
+Utilise une analogie ou une image mentale si cela aide, en signalant clairement qu'il s'agit d'une analogie.
+Reviens ensuite au vocabulaire exact du PASS.
+Termine par une phrase "À retenir".
+Reste fidèle aux ressources fournies et ne crée aucun fait nouveau.`;
   }
   if(action==="chat"){
     return `Tu es RMed, un professeur particulier de PASS.
@@ -109,15 +93,13 @@ Ne te contente jamais de réciter le cours : explique avec d'autres mots, recons
 Quand l'étudiant dit qu'il ne comprend pas, recommence plus simplement et change d'angle.
 Tu peux utiliser des analogies clairement présentées comme telles.
 Quand cela aide, termine par "À retenir".
-Pour une conversation non scolaire très simple (ex. bonjour), réponds naturellement.
-Si une information scolaire n'est pas dans les ressources, dis-le au lieu de l'inventer.
-`;
+Pour une conversation non scolaire très simple, réponds naturellement.
+Si une information scolaire n'est pas dans les ressources, dis-le au lieu de l'inventer.`;
   }
   return `Tu es RMed, professeur particulier de PASS.
 Explique le passage avec des mots simples sans perdre la précision scientifique.
 Ne recopie pas le cours : reformule, donne une intuition, puis le vocabulaire PASS.
-Reste limité aux ressources fournies et n'invente aucun fait.
-`;
+Reste limité aux ressources fournies et n'invente aucun fait.`;
 }
 
 async function callGemini({apiKey,model,instructions,input,schema,maxOutputTokens,temperature}){
@@ -142,22 +124,45 @@ async function callGemini({apiKey,model,instructions,input,schema,maxOutputToken
 module.exports=async function handler(req,res){
   cors(res);
   if(req.method==="OPTIONS")return res.status(204).end();
-  if(req.method==="GET")return json(res,200,{
-    ok:true,
-    service:"RMed IA",
-    provider:process.env.GEMINI_API_KEY?"gemini":process.env.OPENAI_API_KEY?"openai":"none",
-    model:process.env.RMED_GEMINI_MODEL||"gemini-2.5-pro"
-  });
+
+  if(req.method==="GET"){
+    return json(res,200,{
+      ok:true,
+      service:"RMed IA",
+      provider:process.env.GEMINI_API_KEY?"gemini":"none",
+      model:process.env.RMED_GEMINI_MODEL||"gemini-2.5-pro"
+    });
+  }
+
   if(req.method!=="POST")return json(res,405,{error:"Méthode non autorisée."});
 
   let body=req.body||{};
   if(typeof body==="string"){
-    try{
+    try{body=JSON.parse(body)}
+    catch{return json(res,400,{error:"Requête IA illisible."})}
+  }
+
+  const action=String(body?.action||"flashcard");
+  const text=String(body?.text||"").trim();
+  const context=String(body?.context||"").trim();
+  if(!text)return json(res,400,{error:"Aucune demande n’a été fournie."});
+  if(text.length>12000)return json(res,413,{error:"Demande trop longue."});
+
+  const instructions=buildInstructions(action);
+  const input=(action==="qcm_session"?"RESSOURCES POUR LE QCM:\n":"PASSAGE / DEMANDE:\n")+text+"\n\nCONTEXTE ET RESSOURCES PERTINENTES:\n"+context.slice(0,30000);
+  const schema=pickSchema(action);
+  const isQcm=action==="qcm_session";
+  const maxOutputTokens=isQcm?10000:action==="explain_error"?1800:1400;
+  const temperature=isQcm?0.45:0.35;
+
+  try{
     if(!process.env.GEMINI_API_KEY){
       return json(res,500,{error:"RMed IA n’est pas encore connecté à Gemini. Ajoute GEMINI_API_KEY au backend Vercel pour activer l’IA gratuite."});
     }
+
     const models=[process.env.RMED_GEMINI_MODEL||"gemini-2.5-pro","gemini-2.5-flash"].filter((m,i,a)=>m&&a.indexOf(m)===i);
     let lastError=null;
+
     for(const model of models){
       const {upstream,data}=await callGemini({
         apiKey:process.env.GEMINI_API_KEY,
@@ -168,21 +173,26 @@ module.exports=async function handler(req,res){
         maxOutputTokens,
         temperature
       });
+
       if(upstream.ok){
         const raw=textFromGemini(data);
         let parsed=null;
         try{parsed=JSON.parse(raw)}catch{}
-        if(!parsed){lastError=new Error("Gemini a répondu dans un format inattendu.");continue}
+        if(!parsed){
+          lastError=new Error("Gemini a répondu dans un format inattendu.");
+          continue;
+        }
         if(isQcm&&(!Array.isArray(parsed.questions)||parsed.questions.length!==30)){
           lastError=new Error("Gemini n’a pas généré exactement 30 questions.");
           continue;
         }
         return json(res,200,parsed);
       }
+
       lastError=data?.error?.message||new Error("Erreur Gemini.");
-      const retryable=[400,404,429,503].includes(upstream.status);
-      if(!retryable)break;
+      if(![400,404,429,503].includes(upstream.status))break;
     }
+
     return json(res,502,{error:String(lastError?.message||lastError||"Gemini est indisponible.")});
   }catch(err){
     console.error("RMed AI error",err);
