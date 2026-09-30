@@ -1064,3 +1064,38 @@
  .selection-popover{max-width:calc(100vw - 70px);overflow:auto}
  .selection-popover button{padding:0 7px;font-size:10px}
 }
+
+
+/* Reader tools: each tool has one clear job. */
+.pdf-stage.tool-select .pdf-text,
+.pdf-stage.tool-select .pdf-word{
+  pointer-events:auto!important;
+  -webkit-user-select:text!important;
+  user-select:text!important;
+  cursor:text!important;
+}
+.pdf-stage.tool-highlight{
+  touch-action:none!important;
+  cursor:crosshair;
+}
+.pdf-stage.tool-highlight .pdf-text,
+.pdf-stage.tool-highlight .pdf-word{
+  pointer-events:auto!important;
+  -webkit-user-select:none!important;
+  user-select:none!important;
+  cursor:crosshair!important;
+}
+.pdf-stage.tool-hand{
+  cursor:grab;
+}
+.pdf-stage.tool-hand:active{
+  cursor:grabbing;
+}
+.document-tool-palette .palette-highlighter{
+  cursor:pointer!important;
+}
+.document-tool-palette>button.chosen,
+.document-tool-palette .palette-highlighter.chosen{
+  background:#eceaff;
+  color:#5c51df;
+}
