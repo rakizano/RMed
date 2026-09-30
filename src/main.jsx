@@ -486,7 +486,7 @@ function App(){
    <header><b className="mobile">RMed</b><div className="search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher…"/></div><div className="avatar">R</div></header>
 
    {tab==="home"&&<Home cards={cards} due={due.length} courses={courses} nav={nav} open={open}/>}
-   {tab==="course"&&<Course openUpload={()=>setUploadOpen(true)} course={course} pageNumber={pageNumber} setPageNumber={setPageNumber} pdfDoc={pdfDoc} pdfNativeUrl={pdfNativeUrl} pdfLoading={pdfLoading} pdfError={pdfError} zoom={zoom} setZoom={setZoom} sel={sel} onSelection={onSelection} openCreator={openCreator} highlights={highlights.filter(h=>h.courseId===course.id&&h.page===pageNumber)} focusHighlightId={focusHighlightId} clearFocus={()=>setFocusHighlightId(null)} importPdf={file=>addPdf(file,activeFolderId)} courses={courses} folders={folders} activeFolderId={activeFolderId} setActiveFolderId={setActiveFolderId} onCreateFolder={createFolder} open={open} onAskAI={()=>setAiOpen(true)} onReviewCourse={()=>navReview("course",course.id)} onReviewFolder={()=>activeFolderId&&navReview("folder",activeFolderId)} onMoveCourse={()=>setMoveCourseId(course.id)} onMoveCourseId={id=>setMoveCourseId(id)} onMoveCourseId={id=>setMoveCourseId(id)}/>}
+   {tab==="course"&&<Course openUpload={()=>setUploadOpen(true)} course={course} pageNumber={pageNumber} setPageNumber={setPageNumber} pdfDoc={pdfDoc} pdfNativeUrl={pdfNativeUrl} pdfLoading={pdfLoading} pdfError={pdfError} zoom={zoom} setZoom={setZoom} sel={sel} onSelection={onSelection} openCreator={openCreator} highlights={highlights.filter(h=>h.courseId===course.id&&h.page===pageNumber)} focusHighlightId={focusHighlightId} clearFocus={()=>setFocusHighlightId(null)} importPdf={file=>addPdf(file,activeFolderId)} courses={courses} folders={folders} activeFolderId={activeFolderId} setActiveFolderId={setActiveFolderId} onCreateFolder={createFolder} open={open} onAskAI={()=>setAiOpen(true)} onReviewCourse={()=>navReview("course",course.id)} onReviewFolder={()=>activeFolderId&&navReview("folder",activeFolderId)} onMoveCourse={()=>setMoveCourseId(course.id)} onMoveCourseId={id=>setMoveCourseId(id)}/>}
    {tab==="cards"&&<Cards cards={cards} search={search} open={openCardSource} del={deleteCard} edit={editCard} courses={courses} folders={folders} onReviewCourse={id=>navReview("course",id)}/>}
    {tab==="review"&&<Review rc={rc} revealed={revealed} setRevealed={setRevealed} rate={rate} total={due.length} i={ri} courses={courses} folders={folders} course={course} activeFolderId={activeFolderId} scope={reviewScope} setScope={s=>{setReviewScope(s);setRi(0);setRevealed(false)}} onReviewAll={()=>navReview("all",null)}/>} 
    {tab==="qcm"&&<QCM courses={courses} course={course} cards={cards} qcm={qcm} setQcm={setQcm}/>}
@@ -753,17 +753,12 @@ function ExternalPdfReader({courseId,initialPage=1}){
   return()=>{window.removeEventListener("storage",onStorage);bc?.close()};
  },[]);
 
- function eraseExternalHighlight(id){
-  if(!id)return;
-  setHighlights(x=>x.filter(h=>h.id!==id));
-  setSel(current=>current?.highlightId===id?null:current);
- }
  function addExternalHighlight(selection){
   if(!selection?.text||!course)return;
   const pg=course.pages.find(x=>x.n===pageNumber)||{id:course.id+"-p"+pageNumber,n:pageNumber};
   const existing=highlights.find(h=>h.courseId===course.id&&h.pageId===pg.id&&h.text===selection.text);
   if(existing){setSel({...selection,highlightId:existing.id});return}
-  const h={id:uid(),courseId:course.id,pageId:pg.id,page:pageNumber,text:selection.text,rects:selection.rects||[],context:selection.context||selection.text,color:selection.color||markColor,created:Date.now()};
+  const h={id:uid(),courseId:course.id,pageId:pg.id,page:pageNumber,text:selection.text,rects:selection.rects||[],context:selection.context||selection.text,color:selection.color||"#ffe66d99",created:Date.now()};
   setHighlights(x=>[...x,h]);
   setSel({...selection,highlightId:h.id});
   try{new BroadcastChannel("rmed-highlights").postMessage(h)}catch{}
@@ -781,7 +776,6 @@ function ExternalPdfReader({courseId,initialPage=1}){
     <button onClick={()=>setZoom(z=>Math.max(.75,z-.1))}><Minus/></button>
     <span>{Math.round(zoom*100)}%</span>
     <button onClick={()=>setZoom(z=>Math.min(3,z+.1))}><Plus/></button>
-    <button className={locked?"locked":""} onClick={()=>setLocked(v=>!v)}>{locked?<Lock/>:<Unlock/>}</button>
     
    </div>
   </div>
@@ -789,7 +783,7 @@ function ExternalPdfReader({courseId,initialPage=1}){
   {error&&<div className="external-reader-state"><b>Impossible d’ouvrir le PDF</b><p>{error}</p></div>}
   {!loading&&!error&&pdfDoc&&<div className="external-reader-viewport">
     <div className="external-reader-page-wrap">
-      <PDFPage courseId={course.id} pdfDoc={pdfDoc} pageNumber={pageNumber} scale={zoom} highlights={highlights.filter(h=>h.courseId===course.id&&h.page===pageNumber)} focusHighlightId={null} clearFocus={()=>{}} onSelection={addExternalHighlight} locked={locked} markTool={markTool} markColor={markColor} onPinchZoom={setZoom} onEraseHighlight={eraseExternalHighlight}/>
+      <PDFPage courseId={course.id} pdfDoc={pdfDoc} pageNumber={pageNumber} scale={zoom} highlights={highlights.filter(h=>h.courseId===course.id&&h.page===pageNumber)} focusHighlightId={null} clearFocus={()=>{}} onSelection={addExternalHighlight}/>
     </div>
   </div>}
   {sel&&<div className="external-selection">
