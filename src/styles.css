@@ -371,3 +371,227 @@
     justify-content:flex-end;
   }
 }
+
+
+/* Course library: folders first, then the PDFs inside the selected folder. */
+.library-browser{
+  margin:0 0 14px;
+  padding:14px 16px;
+  background:#fbfbfd;
+}
+.library-browser-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+}
+.library-browser-head>div:first-child{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+.library-browser-head>div:first-child b{
+  font-size:15px;
+  color:#2c3140;
+  overflow-wrap:anywhere;
+}
+.library-browser-actions{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:7px;
+  flex-wrap:wrap;
+}
+.library-browser-actions button{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  min-height:36px;
+  padding:0 11px;
+  border-radius:9px;
+  background:#fff;
+  border:1px solid #e2e4eb;
+  color:#596174;
+  font-size:11px;
+  font-weight:800;
+}
+.library-browser-actions button.primary{
+  border-color:#655be8;
+  background:#655be8;
+  color:#fff;
+}
+.library-breadcrumbs{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  margin-top:12px;
+  padding-top:10px;
+  border-top:1px solid #e8e9ef;
+  min-width:0;
+  overflow:auto;
+  white-space:nowrap;
+}
+.library-breadcrumbs button{
+  background:transparent;
+  color:#7a8291;
+  padding:2px 0;
+  font-size:11px;
+}
+.library-breadcrumbs button.current{
+  color:#655be8;
+  font-weight:800;
+}
+.library-breadcrumbs span{
+  color:#b0b5c0;
+  font-size:11px;
+}
+.library-section{
+  margin-top:13px;
+}
+.library-section-title{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  margin-bottom:8px;
+  color:#737b8b;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+.library-section-title svg{
+  color:#655be8;
+}
+.folder-grid,
+.course-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+  gap:8px;
+}
+.folder-card,
+.course-file{
+  min-width:0;
+  display:grid;
+  grid-template-columns:38px minmax(0,1fr) 18px;
+  align-items:center;
+  gap:10px;
+  text-align:left;
+  border:1px solid #e5e7ee;
+  background:#fff;
+  border-radius:11px;
+  padding:10px;
+  transition:transform .12s ease,box-shadow .12s ease,border-color .12s ease;
+}
+.folder-card:hover,
+.course-file:hover{
+  transform:translateY(-1px);
+  box-shadow:0 6px 18px #2b30400d;
+}
+.folder-card{
+  background:#fffdf7;
+}
+.folder-icon,
+.course-file-icon{
+  width:38px;
+  height:38px;
+  border-radius:10px;
+  display:grid;
+  place-items:center;
+}
+.folder-icon{
+  background:#fff0b8;
+  color:#8b6c20;
+}
+.course-file-icon{
+  background:#f1efff;
+  color:#655be8;
+}
+.folder-card>div:nth-child(2),
+.course-file-body{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+}
+.folder-card b,
+.course-file-body b{
+  color:#2f3442;
+  font-size:12px;
+  line-height:1.35;
+  overflow-wrap:anywhere;
+}
+.folder-card small,
+.course-file-body small{
+  color:#9097a5;
+  font-size:10px;
+  line-height:1.35;
+}
+.folder-card>svg,
+.course-file>svg{
+  color:#a0a6b2;
+}
+.course-file.selected{
+  border-color:#d8d4ff;
+  background:#f8f7ff;
+}
+.library-empty{
+  border:1px dashed #dfe1e8;
+  border-radius:10px;
+  padding:14px;
+  text-align:center;
+  color:#8d94a2;
+  font-size:11px;
+  background:#fff;
+}
+@media(max-width:900px){
+  .library-browser-head{
+    align-items:flex-start;
+    flex-direction:column;
+  }
+  .library-browser-actions{
+    width:100%;
+    justify-content:flex-start;
+  }
+  .folder-grid,
+  .course-grid{
+    grid-template-columns:1fr 1fr;
+  }
+}
+@media(max-width:620px){
+  .library-browser{
+    padding:12px;
+  }
+  .library-browser-actions{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    width:100%;
+  }
+  .library-browser-actions button{
+    min-width:0;
+  }
+  .library-browser-actions .primary{
+    grid-column:1 / -1;
+  }
+  .folder-grid,
+  .course-grid{
+    grid-template-columns:1fr;
+  }
+}
+
+/* Apple Pencil precision: keep the browser text geometry stable while selecting. */
+.pdf-text{
+  -webkit-text-size-adjust:none;
+  text-size-adjust:none;
+}
+.pdf-word{
+  white-space:pre;
+  transform-origin:0 0;
+  -webkit-user-select:text;
+  user-select:text;
+}
+.pdf-stage.pencil-active .pdf-word{
+  -webkit-user-select:none;
+  user-select:none;
+}
