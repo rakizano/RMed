@@ -279,97 +279,135 @@ function DemoPage({pg,onSelection}){
 
 function PDFPage({pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus,onSelection,locked}){
  const pageRef=useRef(null),canvasRef=useRef(null),textRef=useRef(null),contextRef=useRef("");
- const penRef=useRef({active:false,points:[],spans:new Set(),pointerId:null,scrollLeft:0,scrollTop:0});
- const[tempRects,setTempRects]=useState([]);
- const[tempText,setTempText]=useState("");
+ const penRef=useRef({active:false,points:[],spans:new Set(),pointerId:null});
+ const touchRef=useRef(new Map());
+ const panRef=useRef({active:false,lastX:0,lastY:0});
  const[height,setHeight]=useState(800);
+ const[penTrace,setPenTrace]=useState([]);
+ const[tempRects,setTempRects]=useState([]);
 
  useEffect(()=>{let cancelled=false;
  async function render(){
-   const pdfjsLib=await getPdfjs();
-   const page=await pdfDoc.getPage(pageNumber);
-   const viewport=page.getViewport({scale});
-   const dpr=window.devicePixelRatio||1;
-   const canvas=canvasRef.current;if(!canvas)return;
-   canvas.width=Math.floor(viewport.width*dpr);canvas.height=Math.floor(viewport.height*dpr);
-   canvas.style.width=viewport.width+"px";canvas.style.height=viewport.height+"px";
-   const ctx=canvas.getContext("2d");
-   await page.render({canvasContext:ctx,viewport,transform:dpr!==1?[dpr,0,0,dpr,0,0]:null}).promise;
-   if(cancelled)return;
-   setHeight(viewport.height);
-   const text=await page.getTextContent();
-   if(cancelled)return;
-   contextRef.current=text.items.map(i=>i.str).join(" ");
-   const layer=textRef.current;layer.innerHTML="";
-   for(const item of text.items){
-     if(!item.str)continue;
-     const span=document.createElement("span");
-     const tx=pdfjsLib.Util.transform(viewport.transform,item.transform);
-     const fontHeight=Math.hypot(tx[2],tx[3]);
-     const angle=Math.atan2(tx[1],tx[0]);
-     span.textContent=item.str;
-     span.className="pdf-word";
-     span.style.left=tx[4]+"px";span.style.top=(tx[5]-fontHeight)+"px";
-     span.style.fontSize=fontHeight+"px";span.style.fontFamily=item.fontName||"sans-serif";
-     span.style.transform="rotate("+angle+"rad)";
-     layer.appendChild(span);
-   }
-   requestAnimationFrame(()=>{if(focusHighlightId){const el=document.getElementById("hl-"+focusHighlightId);el?.scrollIntoView({behavior:"smooth",block:"center"});clearFocus()}});
+   try{
+     const pdfjsLib=await getPdfjs();
+     const page=await pdfDoc.getPage(pageNumber);
+     const viewport=page.getViewport({scale});
+     const dpr=window.devicePixelRatio||1;
+     const canvas=canvasRef.current;if(!canvas)return;
+     canvas.width=Math.floor(viewport.width*dpr);canvas.height=Math.floor(viewport.height*dpr);
+     canvas.style.width=viewport.width+"px";canvas.style.height=viewport.height+"px";
+     const ctx=canvas.getContext("2d");
+     await page.render({canvasContext:ctx,viewport,transform:dpr!==1?[dpr,0,0,dpr,0,0]:null}).promise;
+     if(cancelled)return;
+     setHeight(viewport.height);
+     const text=await page.getTextContent();
+     if(cancelled)return;
+     contextRef.current=text.items.map(i=>i.str).join(" ");
+     const layer=textRef.current;if(!layer)return;
+     layer.innerHTML="";
+     for(const item of text.items){
+       if(!item.str)continue;
+       const span=document.createElement("span");
+       const tx=pdfjsLib.Util.transform(viewport.transform,item.transform);
+       const fontHeight=Math.hypot(tx[2],tx[3]);
+       const angle=Math.atan2(tx[1],tx[0]);
+       span.textContent=item.str;
+       span.className="pdf-word";
+       span.style.left=tx[4]+"px";span.style.top=(tx[5]-fontHeight)+"px";
+       span.style.fontSize=fontHeight+"px";span.style.fontFamily=item.fontName||"sans-serif";
+       span.style.transform="rotate("+angle+"rad)";
+       layer.appendChild(span);
+     }
+     requestAnimationFrame(()=>{if(focusHighlightId){const el=document.getElementById("hl-"+focusHighlightId);el?.scrollIntoView({behavior:"smooth",block:"center"});clearFocus()}});
+   }catch(err){console.error("PDF render error",err)}
  }
- render().catch(console.error);
- return()=>{cancelled=true};
+ render();
+ return()=>{cancelled=true;setPenTrace([]);setTempRects([])};
  },[pdfDoc,pageNumber,scale]);
 
- function addPenPoint(e){
+ function spanAtPoint(e){
+   const els=document.elementsFromPoint?.(e.clientX,e.clientY)||[];
+   let span=els.find(el=>el.classList?.contains("pdf-word"));
+   if(span)return span;
+   const range=document.caretRangeFromPoint?.(e.clientX,e.clientY);
+   const node=range?.startContainer;
+   return node?.parentElement?.closest?.(".pdf-word")||null;
+ }
+
+ function updatePenVisual(e){
    const p=penRef.current;
-   const els=document.elementsFromPoint(e.clientX,e.clientY);
-   els.forEach(el=>{if(el.classList?.contains("pdf-word"))p.spans.add(el)});
-   const root=pageRef.current?.getBoundingClientRect();
-   if(root){
-     const rects=[...p.spans].map(el=>{const r=el.getBoundingClientRect();return{x:r.left-root.left,y:r.top-root.top,width:r.width,height:r.height,order:[...textRef.current.children].indexOf(el)}})
-       .filter(r=>r.width>1&&r.height>1).sort((a,b)=>a.order-b.order);
-     setTempRects(rects.map(({order,...r})=>r));
-     setTempText([...p.spans].map(el=>el.textContent).join(" ").replace(/\\s+/g," ").trim());
-   }
-   p.points.push({x:e.clientX,y:e.clientY});
+   const root=pageRef.current?.getBoundingClientRect();if(!root)return;
+   p.points.push({x:e.clientX-root.left,y:e.clientY-root.top});
+   const span=spanAtPoint(e);
+   if(span)p.spans.add(span);
+   const spans=[...p.spans];
+   const rects=spans.map(el=>{const r=el.getBoundingClientRect();return{x:r.left-root.left,y:r.top-root.top,width:r.width,height:r.height,order:[...textRef.current.children].indexOf(el)}})
+     .filter(r=>r.width>1&&r.height>1).sort((a,b)=>a.order-b.order);
+   setTempRects(rects.map(({order,...r})=>r));
+   setPenTrace(p.points.slice(-140));
  }
 
  function penDown(e){
    if(e.pointerType!=="pen")return;
    e.preventDefault();
-   const stage=pageRef.current?.parentElement;
-   penRef.current={active:true,points:[],spans:new Set(),pointerId:e.pointerId,scrollLeft:stage?.scrollLeft||0,scrollTop:stage?.scrollTop||0};
-   if(stage){stage.scrollLeft=penRef.current.scrollLeft;stage.scrollTop=penRef.current.scrollTop}
+   penRef.current={active:true,points:[],spans:new Set(),pointerId:e.pointerId};
    e.currentTarget.setPointerCapture?.(e.pointerId);
-   addPenPoint(e);
+   updatePenVisual(e);
  }
  function penMove(e){
    if(!penRef.current.active||e.pointerType!=="pen")return;
    e.preventDefault();
-   const stage=pageRef.current?.parentElement;
-   if(stage){
-     stage.scrollLeft=penRef.current.scrollLeft;
-     if(locked)stage.scrollTop=penRef.current.scrollTop;
-   }
-   addPenPoint(e);
+   updatePenVisual(e);
  }
  function penUp(e){
    const p=penRef.current;
    if(!p.active||e.pointerType!=="pen")return;
    e.preventDefault();
    p.active=false;
+   e.currentTarget.releasePointerCapture?.(p.pointerId);
    const spans=[...p.spans];
-   setTempRects([]);
-   setTempText("");
+   setTempRects([]);setPenTrace([]);
    if(!spans.length)return;
    const root=pageRef.current.getBoundingClientRect();
-   const rects=spans.map(el=>{const r=el.getBoundingClientRect();return{x:r.left-root.left,y:r.top-root.top,width:r.width,height:r.height,order:[...textRef.current.children].indexOf(el)}}).filter(r=>r.width>1&&r.height>1).sort((a,b)=>a.order-b.order);
+   const rects=spans.map(el=>{const r=el.getBoundingClientRect();return{x:r.left-root.left,y:r.top-root.top,width:r.width,height:r.height,order:[...textRef.current.children].indexOf(el)}})
+     .filter(r=>r.width>1&&r.height>1).sort((a,b)=>a.order-b.order);
    const text=spans.map(el=>el.textContent).join(" ").replace(/\s+/g," ").trim();
    onSelection({text,rects:rects.map(({order,...r})=>r),context:contextRef.current,autoHighlight:true});
  }
 
+ function touchDown(e){
+   if(e.pointerType!=="touch"||locked)return;
+   e.preventDefault();
+   touchRef.current.set(e.pointerId,{x:e.clientX,y:e.clientY});
+   if(touchRef.current.size===2){
+     const pts=[...touchRef.current.values()];
+     panRef.current={active:true,lastX:(pts[0].x+pts[1].x)/2,lastY:(pts[0].y+pts[1].y)/2};
+   }
+   e.currentTarget.setPointerCapture?.(e.pointerId);
+ }
+ function touchMove(e){
+   if(e.pointerType!=="touch"||locked)return;
+   e.preventDefault();
+   const old=touchRef.current.get(e.pointerId);
+   if(!old)return;
+   old.x=e.clientX;old.y=e.clientY;
+   if(touchRef.current.size!==2)return;
+   const pts=[...touchRef.current.values()];
+   const cx=(pts[0].x+pts[1].x)/2,cy=(pts[0].y+pts[1].y)/2;
+   const stage=pageRef.current?.parentElement;if(stage){
+     stage.scrollLeft-=cx-panRef.current.lastX;
+     stage.scrollTop-=cy-panRef.current.lastY;
+   }
+   panRef.current.lastX=cx;panRef.current.lastY=cy;
+ }
+ function touchUp(e){
+   if(e.pointerType!=="touch")return;
+   touchRef.current.delete(e.pointerId);
+   if(touchRef.current.size<2)panRef.current.active=false;
+ }
+
  function select(){
-   if(penRef.current.active)return;
+   if(penRef.current.active||touchRef.current.size)return;
    const s=window.getSelection();if(!s||s.isCollapsed||!textRef.current)return;
    if(!textRef.current.contains(s.anchorNode))return;
    const t=s.toString().trim();if(!t)return;
@@ -378,13 +416,23 @@ function PDFPage({pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus
    onSelection({text:t,rects,context:contextRef.current});
    s.removeAllRanges();
  }
- return <div className={"pdf-stage "+(locked?"pdf-stage-locked":"")}><div className="pdf-page" ref={pageRef} style={{height}} onPointerDown={penDown} onPointerMove={penMove} onPointerUp={penUp} onPointerCancel={penUp} onMouseUp={select}>
-   <canvas ref={canvasRef}/>
-   <div className="pdf-highlights"><div className="highlight-group live-highlight">{tempRects.map((r,i)=><span key={"t"+i} style={{left:r.x,top:r.y,width:r.width,height:r.height}}/> )}</div>{highlights.map(h=><div key={h.id} id={"hl-"+h.id} className="highlight-group" onClick={()=>onSelection({text:h.text,rects:h.rects,context:h.context,highlightId:h.id})}>{h.rects.map((r,i)=><span key={i} style={{left:r.x,top:r.y,width:r.width,height:r.height}}/> )}</div>)}</div>
-   <div className="pdf-text" ref={textRef}/>
- </div></div>
-}
 
+ function pointerDown(e){if(e.pointerType==="pen")penDown(e);else if(e.pointerType==="touch")touchDown(e)}
+ function pointerMove(e){if(e.pointerType==="pen")penMove(e);else if(e.pointerType==="touch")touchMove(e)}
+ function pointerUp(e){if(e.pointerType==="pen")penUp(e);else if(e.pointerType==="touch")touchUp(e)}
+
+ return <div className={"pdf-stage "+(locked?"pdf-stage-locked":"")} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp}>
+  <div className="pdf-page" ref={pageRef} style={{height}} onMouseUp={select}>
+   <canvas ref={canvasRef}/>
+   <div className="pdf-highlights">
+    {penTrace.length>1&&<svg className="pen-trace" viewBox={"0 0 "+Math.max(1,pageRef.current?.clientWidth||1)+" "+Math.max(1,pageRef.current?.clientHeight||1)} preserveAspectRatio="none"><polyline points={penTrace.map(p=>p.x+","+p.y).join(" ")} fill="none" stroke="rgba(255,230,109,.68)" strokeWidth="14" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+    {tempRects.length>0&&<div className="highlight-group live-highlight">{tempRects.map((r,i)=><span key={"t"+i} style={{left:r.x,top:r.y,width:r.width,height:r.height}}/> )}</div>}
+    {highlights.map(h=><div key={h.id} id={"hl-"+h.id} className="highlight-group" onClick={()=>onSelection({text:h.text,rects:h.rects,context:h.context,highlightId:h.id})}>{h.rects.map((r,i)=><span key={i} style={{left:r.x,top:r.y,width:r.width,height:r.height}}/> )}</div>)}
+   </div>
+   <div className="pdf-text" ref={textRef}/>
+  </div>
+ </div>
+}
 
 function SelectionBar({sel,suggestions,onCreate,onUse}){
  return <div className="selection-bar">
