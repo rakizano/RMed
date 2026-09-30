@@ -217,3 +217,157 @@
   .external-reader-viewport{padding:10px}
   .external-reader-button span{display:none}
 }
+
+
+/* Reader layout fixes: controls never collapse into each other. */
+.pdf-toolbar{
+  flex-wrap:nowrap;
+  min-width:0;
+}
+.pdf-toolbar .external-reader-button{
+  width:auto;
+  min-width:max-content;
+  padding:0 10px;
+  white-space:nowrap;
+  flex:0 0 auto;
+}
+.pdf-toolbar .annotation-tools{
+  flex:0 0 auto;
+}
+.pdf-toolbar .tool-label{
+  width:auto;
+  min-width:max-content;
+  padding:0 10px;
+  flex:0 0 auto;
+}
+.pdf-toolbar>span:not(.spacer){
+  flex:0 0 auto;
+  white-space:nowrap;
+}
+
+/* Flashcards: make recto + verso visibly distinct and editable. */
+.cards-library{
+  display:grid;
+  gap:14px;
+}
+.flashcard-row{
+  display:grid;
+  grid-template-columns:42px minmax(0,1fr) auto;
+  gap:16px;
+  align-items:stretch;
+  background:#fff;
+  border:1px solid #e5e7ee;
+  border-radius:16px;
+  padding:16px;
+  box-shadow:0 4px 16px #2b30400a;
+}
+.flashcard-type{
+  width:38px;
+  height:38px;
+  border-radius:11px;
+  background:#f1efff;
+  display:grid;
+  place-items:center;
+  font-size:20px;
+}
+.flashcard-content{
+  min-width:0;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 1px minmax(0,1fr);
+  gap:16px;
+  align-items:start;
+}
+.flashcard-side{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:7px;
+}
+.flashcard-side small{
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.08em;
+  color:#655be8;
+}
+.flashcard-side strong,
+.flashcard-side p{
+  margin:0;
+  color:#252a38;
+  line-height:1.45;
+  overflow-wrap:anywhere;
+}
+.flashcard-side.back p{
+  color:#626a7b;
+}
+.flashcard-divider{
+  width:1px;
+  min-height:58px;
+  background:#e7e8ed;
+}
+.flashcard-meta{
+  grid-column:1 / -1;
+  padding-top:8px;
+  border-top:1px solid #f0f1f4;
+  color:#9299a6;
+  font-size:11px;
+}
+.flashcard-actions{
+  display:flex;
+  flex-direction:column;
+  gap:7px;
+  justify-content:center;
+}
+.flashcard-actions button{
+  background:#f3f4f7;
+  padding:8px 10px;
+  border-radius:9px;
+  white-space:nowrap;
+}
+.flashcard-actions .danger{
+  color:#d45765;
+}
+
+/* Suggested cards in the creation modal: show both sides before choosing. */
+.suggestion-card small{
+  display:block;
+  text-align:left;
+  line-height:1.4;
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
+.suggestion-card small strong{
+  color:#655be8;
+}
+@media(max-width:760px){
+  .pdf-toolbar{
+    gap:5px;
+    padding:7px;
+  }
+  .pdf-toolbar .tool-label span,
+  .pdf-toolbar .external-reader-button span{
+    display:none;
+  }
+  .pdf-toolbar .tool-label,
+  .pdf-toolbar .external-reader-button{
+    min-width:34px;
+    width:34px;
+    padding:0;
+  }
+  .flashcard-row{
+    grid-template-columns:34px minmax(0,1fr);
+  }
+  .flashcard-content{
+    grid-template-columns:1fr;
+    gap:10px;
+  }
+  .flashcard-divider{
+    width:100%;
+    height:1px;
+    min-height:1px;
+  }
+  .flashcard-actions{
+    grid-column:1 / -1;
+    flex-direction:row;
+    justify-content:flex-end;
+  }
+}
