@@ -20,6 +20,31 @@ const load=(k,d)=>{
 const save=(k,v)=>{
  try{window.localStorage?.setItem(k,JSON.stringify(v))}catch{}
 };
+function getAIEndpoint(){
+ try{
+  const saved=window.localStorage?.getItem("rmed_ai_api_url")?.trim();
+  if(saved)return saved;
+ }catch{}
+ const env=import.meta.env?.VITE_RMED_AI_URL?.trim();
+ if(env)return env;
+ return "";
+}
+async function callRMedAI({action,text,context=""}){
+ const endpoint=getAIEndpoint();
+ if(!endpoint)throw new Error("IA non connectée : le backend RMed doit être configuré.");
+ const controller=new AbortController();
+ const timer=setTimeout(()=>controller.abort(),30000);
+ try{
+  const res=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},signal:controller.signal,body:JSON.stringify({action,text:String(text||"").slice(0,12000),context:String(context||"").slice(0,16000)})});
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok)throw new Error(data.error||"Le service IA a refusé la demande.");
+  return data;
+ }catch(err){
+  if(err?.name==="AbortError")throw new Error("L’IA met trop de temps à répondre.");
+  throw err;
+ }finally{clearTimeout(timer)}
+}
+
 const uid=()=>{
  try{return window.crypto?.randomUUID?.()||String(Date.now())+Math.random().toString(16).slice(2)}
  catch{return String(Date.now())+Math.random().toString(16).slice(2)}
@@ -241,16 +266,24 @@ function App(){
    makeSuggestions(next);
  }
 
- function openCreator(selection=sel){
+ async function openCreator(selection=sel){
    if(!selection)return;
    const hId=selection.highlightId||addHighlight(selection);
    const first=(suggestions[0])||{type:"basic",front:"Que faut-il retenir ?",back:selection.text};
-   setDraft({...first,highlightId:hId,source:selection.text,page:pageNumber});
+   setDraft({...first,highlightId:hId,source:selection.text,page:pageNumber,aiGenerating:true,aiError:""});
    setModal(true);
+   try{
+    const data=await callRMedAI({action:"flashcard",text:selection.text,context:selection.context||selection.text});
+    if(data?.front&&data?.back){
+      setDraft(d=>d?{...d,type:data.type||"basic",front:data.front,back:data.back,aiGenerating:false,aiError:""}:d);
+    }else throw new Error("Réponse IA incomplète.");
+   }catch(err){
+    setDraft(d=>d?{...d,aiGenerating:false,aiError:err?.message||"IA indisponible"}:d);
+   }
  }
 
  function applySuggestion(s){
-   setDraft({...s,highlightId:sel?.highlightId||addHighlight(sel),source:sel?.text||s.back,page:pageNumber});
+   setDraft({...s,highlightId:sel?.highlightId||addHighlight(sel),source:sel?.text||s.back,page:pageNumber,aiGenerating:false,aiError:""});
    setModal(true);
  }
 
@@ -937,26 +970,26 @@ function AIAssistant({selection,onClose}){
  const[q,setQ]=useState("");
  const[answer,setAnswer]=useState("");
  const[busy,setBusy]=useState(false);
+ const[error,setError]=useState("");
  async function ask(){
-   const question=q.trim()||"Explique-moi ce passage simplement, au niveau PASS, puis donne-moi les points à retenir.";
-   setBusy(true);setAnswer("");
-   try{
-     // This UI is ready for the secure server-side OpenAI connection.
-     // A static GitHub Pages app must not expose an OpenAI API key in the browser.
-     setAnswer("L’assistant IA est prêt à être connecté à OpenAI. Pour cette version statique, je n’envoie pas ta clé API depuis le navigateur afin de ne pas l’exposer.");
-   }finally{setBusy(false)}
+  const question=q.trim()||"Explique-moi ce passage simplement, au niveau PASS, puis donne-moi les points à retenir.";
+  setBusy(true);setAnswer("");setError("");
+  try{
+   const data=await callRMedAI({action:"explain",text:selection?.text||"",context:(selection?.context||"")+"\n\nDemande : "+question});
+   setAnswer(data?.answer||"Réponse vide.");
+  }catch(err){setError(err?.message||"Impossible de contacter l’IA.")}finally{setBusy(false)}
  }
  return <div className="overlay" onClick={e=>{if(e.target===e.currentTarget)onClose()}}>
   <div className="modal ai-modal">
    <div className="mh"><div><small className="eyebrow">RMed IA</small><h2>Assistant du cours</h2></div><button onClick={onClose}><X size={18}/></button></div>
    <div className="ai-source"><small>PASSAGE SÉLECTIONNÉ</small><p>{selection?.text||"Aucun passage sélectionné."}</p></div>
-   <textarea rows="3" value={q} onChange={e=>setQ(e.target.value)} placeholder="Explique, résume, crée une flashcard, donne-moi un piège de QCM…"/>
+   <textarea rows="3" value={q} onChange={e=>setQ(e.target.value)} placeholder="Explique, résume, donne-moi un piège de QCM…"/>
    <button className="primary" onClick={ask} disabled={busy}>{busy?"Réflexion…":"Demander à l’IA"}</button>
+   {error&&<div className="ai-error">{error}</div>}
    {answer&&<div className="ai-answer">{answer}</div>}
   </div>
  </div>
 }
-
 
 function SelectionBar({sel,suggestions,onCreate,onUse,onAskAI}){
  return <div className="selection-bar">
@@ -1001,15 +1034,28 @@ function UploadModal({onClose,onFile}){
 }
 
 function CardModal({draft,setDraft,suggestions,onUse,onClose,onSave}){
+ const[localAI,setLocalAI]=useState(false);
+ async function regenerate(){
+  if(!draft?.source)return;
+  setLocalAI(true);setDraft(x=>x?{...x,aiGenerating:true,aiError:""}:x);
+  try{
+   const data=await callRMedAI({action:"flashcard",text:draft.source,context:draft.source});
+   if(data?.front&&data?.back)setDraft(x=>x?{...x,type:data.type||"basic",front:data.front,back:data.back,aiGenerating:false,aiError:""}:x);
+   else throw new Error("Réponse IA incomplète.");
+  }catch(err){setDraft(x=>x?{...x,aiGenerating:false,aiError:err?.message||"IA indisponible"}:x)}
+  finally{setLocalAI(false)}
+ }
  return <div className="overlay" onClick={e=>{if(e.target===e.currentTarget)onClose()}}>
   <div className="modal">
-   <div className="mh"><div><small className="eyebrow">FLASHCARD</small><h2>Créer ta carte</h2></div><button onClick={onClose}><X size={18}/></button></div>
-   {suggestions?.length>0&&<div className="suggestion-grid">{suggestions.map((s,i)=><button key={i} className={"suggestion-card "+(draft?.type===s.type?"chosen":"")} onClick={()=>onUse(s)}><span className="suggestion-icon">{s.icon}</span><b>{s.title}</b><small><strong>Recto :</strong> {s.front}</small><small><strong>Verso :</strong> {s.back}</small><em>Utiliser ce format</em></button>)}</div>}
-   <label>Recto<textarea rows="3" value={draft?.front||""} onChange={e=>setDraft(d=>({...d,front:e.target.value}))}/></label>
-   <label>Verso<textarea rows="4" value={draft?.back||""} onChange={e=>setDraft(d=>({...d,back:e.target.value}))}/></label>
+   <div className="mh"><div><small className="eyebrow">FLASHCARD</small><h2>{draft?.editingId?"Modifier ta carte":"Créer ta carte"}</h2></div><button onClick={onClose}><X size={18}/></button></div>
+   {suggestions?.length>0&&!draft?.editingId&&<div className="suggestion-grid">{suggestions.map((s,i)=><button key={i} className={"suggestion-card "+(draft?.type===s.type?"chosen":"")} onClick={()=>onUse(s)}><span className="suggestion-icon">{s.icon}</span><b>{s.title}</b><small><strong>Recto :</strong> {s.front}</small><small><strong>Verso :</strong> {s.back}</small><em>Utiliser ce format</em></button>)}</div>}
+   {!draft?.editingId&&<div className="ai-generate-row"><div><b>✨ RMed IA</b><small>{draft?.aiGenerating?"Génération du recto et du verso…":"L’IA transforme le passage en vraie question/réponse."}</small></div><button className="ai-action" onClick={regenerate} disabled={draft?.aiGenerating||localAI}>{draft?.aiGenerating||localAI?"Génération…":"Régénérer avec l’IA"}</button></div>}
+   {draft?.aiError&&<div className="ai-error">{draft.aiError}</div>}
+   <label>Recto<textarea rows="3" value={draft?.front||""} onChange={e=>setDraft(x=>({...x,front:e.target.value,aiError:""}))} placeholder="La question à laquelle tu dois répondre."/></label>
+   <label>Verso<textarea rows="4" value={draft?.back||""} onChange={e=>setDraft(x=>({...x,back:e.target.value,aiError:""}))} placeholder="La réponse précise à mémoriser."/></label>
    <div className="source"><small>Source • page {draft?.page||"—"}</small><p>{draft?.source||"Passage sélectionné"}</p></div>
-   <div className="ai"><Sparkles size={16}/><span>RMed garde le lien avec le passage exact du cours.</span></div>
-   <div className="actions"><button onClick={onClose}>Annuler</button><button className="primary" onClick={onSave}>Enregistrer</button></div>
+   <div className="ai"><Sparkles size={16}/><span>Le recto et le verso restent entièrement modifiables avant l’enregistrement.</span></div>
+   <div className="actions"><button onClick={onClose}>Annuler</button><button className="primary" onClick={onSave} disabled={!draft?.front?.trim()||!draft?.back?.trim()}>Enregistrer la flashcard</button></div>
   </div>
  </div>
 }
