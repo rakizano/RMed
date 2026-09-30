@@ -1450,3 +1450,7 @@
 
 /* Modals must always sit above the document tools and selection UI. */
 .overlay .modal{position:relative;z-index:1001}
+
+/* Final stacking guard for every reader overlay. */
+.overlay{z-index:10000!important}
+.overlay .modal{position:relative;z-index:10001!important}
