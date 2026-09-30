@@ -1,7 +1,7 @@
 const allowedOrigin = process.env.RMED_ALLOWED_ORIGIN || "https://rakizano.github.io";
 
 function cors(res){
-  res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
+  res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Vary","Origin");
   res.setHeader("Access-Control-Allow-Methods","POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers","Content-Type");
@@ -25,6 +25,7 @@ function json(res,status,body){
 module.exports=async function handler(req,res){
   cors(res);
   if(req.method==="OPTIONS")return res.status(204).end();
+  if(req.method==="GET")return json(res,200,{ok:true,service:"RMed IA"});
   if(req.method!=="POST")return json(res,405,{error:"Méthode non autorisée."});
   if(!process.env.OPENAI_API_KEY)return json(res,500,{error:"OPENAI_API_KEY n’est pas configurée sur le backend."});
 
