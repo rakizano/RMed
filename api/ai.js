@@ -1,5 +1,7 @@
-function cors(res){
-  res.setHeader("Access-Control-Allow-Origin","*");
+function cors(res,req){
+  const origin=req?.headers?.origin||"";
+  const allowed=new Set(["https://rakizano.github.io","http://localhost:5173","http://127.0.0.1:5173"]);
+  if(!origin||allowed.has(origin))res.setHeader("Access-Control-Allow-Origin",origin||"*");
   res.setHeader("Vary","Origin");
   res.setHeader("Access-Control-Allow-Methods","POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers","Content-Type");
@@ -166,7 +168,30 @@ Ne recopie pas le passage mot pour mot.
 ${schemaInstruction(action)}`;
 }
 
-function parseJson(text){
+
+const rateWindowMs=60_000;
+const rateMax=90;
+const rateBuckets=globalThis.__rmedRateBuckets||(globalThis.__rmedRateBuckets=new Map());
+function getClientId(req){
+  const forwarded=String(req?.headers?.["x-forwarded-for"]||"").split(",")[0].trim();
+  return forwarded||String(req?.headers?.["x-real-ip"]||"").trim()||"anonymous";
+}
+function rateLimited(req){
+  const now=Date.now();
+  const id=getClientId(req);
+  const bucket=rateBuckets.get(id)||{start:now,count:0};
+  if(now-bucket.start>=rateWindowMs){bucket.start=now;bucket.count=0;}
+  bucket.count+=1;rateBuckets.set(id,bucket);
+  if(rateBuckets.size>500){for(const [key,value] of rateBuckets)if(now-value.start>=rateWindowMs)rateBuckets.delete(key);}
+  return bucket.count>rateMax;
+}
+function timeoutForAction(action){
+  if(action==="qcm_session")return 90_000;
+  if(action==="flashcard_batch")return 60_000;
+  if(action==="flashcard"||action==="explain_error"||action==="explain")return 25_000;
+  return 45_000;
+}
+\nfunction parseJson(text){
   const raw=String(text||"").trim();
   if(!raw)return null;
   try{return JSON.parse(raw)}catch{}
@@ -243,7 +268,7 @@ async function callGemini({apiKey,models,instructions,input,action,schema,maxOut
             responseSchema:schema
           }
         })
-      });
+      },timeoutForAction(action));
       if(upstream.ok){
         const parsed=parseJson(textFromGemini(data));
         if(validateParsed(action,parsed)){
@@ -329,11 +354,11 @@ async function callCompatible({provider,instructions,input,action,maxOutputToken
   let result=await fetchJson(url,{method:"POST",headers,body:JSON.stringify({
     ...baseBody,
     response_format:{type:"json_object"}
-  })});
+  })},timeoutForAction(action));
   if(result.upstream.status===400){
     const msg=String(result.data?.error?.message||"").toLowerCase();
     if(msg.includes("response_format")||msg.includes("json")||msg.includes("unsupported")){
-      result=await fetchJson(url,{method:"POST",headers,body:JSON.stringify(baseBody)});
+      result=await fetchJson(url,{method:"POST",headers,body:JSON.stringify(baseBody)},timeoutForAction(action));
     }
   }
   if(result.upstream.ok){
@@ -344,7 +369,7 @@ async function callCompatible({provider,instructions,input,action,maxOutputToken
 }
 
 export default async function handler(req,res){
-  cors(res);
+  cors(res,req);
   if(req.method==="OPTIONS")return res.status(204).end();
 
   const providers=providerConfigs();
@@ -361,6 +386,8 @@ export default async function handler(req,res){
   }
 
   if(req.method!=="POST")return json(res,405,{error:"Méthode non autorisée."});
+
+  if(rateLimited(req))return json(res,429,{error:"Trop de demandes momentanément. Réessaie dans quelques secondes.",code:"RATE_LIMITED"});
 
   let body=req.body||{};
   if(typeof body==="string"){
