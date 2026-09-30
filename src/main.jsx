@@ -455,17 +455,36 @@ function App(){
    setSel({...selection,courseId:course.id,page:Number(selection.page||pageNumber)});
  }
  
+ function buildInstantFlashcard(text){
+ const clean=String(text||"").replace(/\s+/g," ").trim();
+ if(!clean)return {front:"",back:""};
+ const firstSentence=(clean.match(/^(.{24,220}?)(?:[.!?]|$)/)||[])[1]?.trim()||clean.slice(0,180);
+ const comma=firstSentence.indexOf(",");
+ const subject=comma>12?firstSentence.slice(0,comma).trim():"ce passage";
+ let front;
+ if(/\b(est|sont|correspond|permet|permettent|désigne|définit|constitue|comprend|se compose)\b/i.test(firstSentence)){
+   front="Que faut-il retenir concernant "+subject+" ?";
+ }else{
+   front="Quel est le point essentiel de ce passage ?";
+ }
+ return {front,back:clean};
+}
+
  async function openCreator(selection=sel){
    if(!selection?.text?.trim())return;
    const hId=selection.highlightId||persistSelection(selection,highlightColor);
-   setDraft({type:"basic",front:"",back:"",images:[],highlightId:hId,source:selection.text,page:pageNumber,aiGenerating:true,aiError:""});
+   const instant=buildInstantFlashcard(selection.text);
+   setDraft({type:"basic",front:instant.front,back:instant.back,images:[],highlightId:hId,source:selection.text,page:pageNumber,aiGenerating:true,aiError:""});
    setModal(true);
    try{
-    const aiContext=await getSelectionAIContext(selection);
-    const data=await callRMedAI({action:"flashcard",text:selection.text,context:aiContext});
+    // Chemin rapide : le passage sélectionné suffit pour lancer l'IA.
+    // On évite de bloquer l'ouverture en extrayant tout le PDF au préalable.
+    const data=await callRMedAI({action:"flashcard",text:selection.text,context:selection.text});
     if(data?.front&&data?.back)setDraft(d=>d?{...d,type:data.type||"basic",front:data.front,back:data.back,aiGenerating:false,aiError:""}:d);
     else throw new Error("Réponse IA incomplète.");
-   }catch(err){setDraft(d=>d?{...d,aiGenerating:false,aiError:err?.message||"IA indisponible"}:d)}
+   }catch(err){
+    setDraft(d=>d?{...d,aiGenerating:false,aiError:err?.message||"IA indisponible"}:d);
+   }
  }
  function persistSelection(selection,color){
    if(!selection?.text?.trim())return null;
