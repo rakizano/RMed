@@ -469,8 +469,8 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,c
    const from=children[lo],to=children[hi];
    if(from&&to){
     try{
-     range.setStart(forward?from.firstChild:to.firstChild,forward?0:(to.textContent?.length||0));
-     range.setEnd(forward?to.firstChild:from.firstChild,forward?(to.textContent?.length||0):0);
+     range.setStart(from.firstChild,0);
+     range.setEnd(to.firstChild,to.textContent?.length||0);
      if(!range.collapsed)return range;
     }catch{}
    }
