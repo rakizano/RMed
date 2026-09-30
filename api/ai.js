@@ -73,7 +73,7 @@ module.exports=async function handler(req,res){
       schema:{type:"object",additionalProperties:false,properties:{
         questions:{type:"array",minItems:30,maxItems:30,items:{type:"object",additionalProperties:false,properties:{
           question:{type:"string"},
-          choices:{type:"array",minItems:2,maxItems:3,items:{type:"string"}},
+          choices:{type:"array",minItems:3,maxItems:3,items:{type:"string"}},
           answerIndex:{type:"integer",minimum:0,maximum:2},
           explanation:{type:"string"}
         },required:["question","choices","answerIndex","explanation"]}}
@@ -110,7 +110,7 @@ module.exports=async function handler(req,res){
         model:process.env.RMED_OPENAI_MODEL||"gpt-5-mini",
         instructions,
         input,
-        max_output_tokens:600,
+        max_output_tokens:action==="qcm_session"?7000:1200,
         text:{format:{type:"json_schema",name:selected.name,strict:true,schema:selected.schema}}
       })
     });
