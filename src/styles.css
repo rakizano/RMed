@@ -971,3 +971,18 @@
   font-weight:800;
 }
 .note-create-card:active{transform:scale(.98)}
+
+/* Native, Apple-like text selection in highlight mode. Do not intercept the Pencil. */
+.pdf-stage.tool-highlight{
+  touch-action:auto!important;
+  overflow:auto!important;
+  overscroll-behavior:auto!important;
+}
+.pdf-stage.tool-highlight .pdf-text,
+.pdf-stage.tool-highlight .pdf-word{
+  touch-action:auto!important;
+  -webkit-user-select:text!important;
+  user-select:text!important;
+  cursor:text!important;
+}
+.pdf-stage.tool-highlight.pencil-active{touch-action:auto!important}
