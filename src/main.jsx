@@ -100,6 +100,7 @@ function App(){
  const[qcm,setQcm]=useState(null);
  const[pdfLocked,setPdfLocked]=useState(false);
  const[uploadOpen,setUploadOpen]=useState(false);
+ const[aiOpen,setAiOpen]=useState(false);
  const pdfCache=useRef(new Map());
 
  useEffect(()=>save("rmed_courses",courses),[courses]);
@@ -117,15 +118,19 @@ function App(){
      if(pdfCache.current.has(c.id)){setPdfDoc(pdfCache.current.get(c.id));setPdfLoading(false);return}
      const data=await getPdf(c.id);
      if(!data)throw new Error("PDF introuvable dans le stockage de cet appareil.");
-     if(isAppleMobile()){
+     try{
+       const doc=await openPdfDocument(data);
+       pdfCache.current.set(c.id,doc);
+       setPdfDoc(doc);
+       setPdfNativeUrl("");
+       return;
+     }catch(pdfJsError){
+       if(!isAppleMobile())throw pdfJsError;
        const url=URL.createObjectURL(new Blob([data],{type:"application/pdf"}));
        if(pdfBlobRef.url)URL.revokeObjectURL(pdfBlobRef.url);
        pdfBlobRef.url=url;
        setPdfNativeUrl(url);
-       setPdfLoading(false);
-       return;
      }
-     const doc=await openPdfDocument(data);
      pdfCache.current.set(c.id,doc);
      setPdfDoc(doc);
    }catch(err){
@@ -155,21 +160,23 @@ function App(){
      await savePdf(id,buffer);
      setCourses(x=>[...x,c]);
      setCourse(c);setPageNumber(1);setPdfDoc(null);setTab("course");setUploadOpen(false);
-     if(isAppleMobile()){
+     let doc=null;
+     try{
+       doc=await openPdfDocument(buffer.slice(0));
+       setPdfNativeUrl("");
+     }catch(e){
+       if(!isAppleMobile())throw e;
        const url=URL.createObjectURL(new Blob([buffer],{type:"application/pdf"}));
        if(pdfBlobRef.url)URL.revokeObjectURL(pdfBlobRef.url);
-       pdfBlobRef.url=url;setPdfNativeUrl(url);
-       // Keep the PDF visible immediately; page metadata is filled in the background.
-       setPdfLoading(false);
-       try{
-         const doc=await openPdfDocument(buffer.slice(0));
-         pdfCache.current.set(id,doc);
-         setPdfDoc(doc);
-         setCourses(x=>x.map(v=>v.id===id?{...v,pages:Array.from({length:doc.numPages},(_,i)=>({id:uid(),n:i+1}))}:v));
-       }catch(e){console.warn("Safari PDF.js enhancement unavailable; native PDF remains active.",e)}
-       return;
+       pdfBlobRef.url=url;
+       setPdfNativeUrl(url);
      }
-     const doc=await openPdfDocument(buffer.slice(0));
+     if(doc){
+       pdfCache.current.set(id,doc);
+       setPdfDoc(doc);
+       setCourses(x=>x.map(v=>v.id===id?{...v,pages:Array.from({length:doc.numPages},(_,i)=>({id:uid(),n:i+1}))}:v));
+     }
+     return;
      pdfCache.current.set(id,doc);
      setPdfDoc(doc);
      setCourses(x=>x.map(v=>v.id===id?{...v,pages:Array.from({length:doc.numPages},(_,i)=>({id:uid(),n:i+1}))}:v));
@@ -276,6 +283,7 @@ function App(){
   </main>
 
   {uploadOpen&&<UploadModal onClose={()=>setUploadOpen(false)} onFile={addPdf}/>}
+  {aiOpen&&<AIAssistant selection={sel} onClose={()=>setAiOpen(false)}/>}
   {modal&&<CardModal draft={draft} setDraft={setDraft} suggestions={suggestions} onUse={applySuggestion} onClose={()=>{setModal(false);setDraft(null)}} onSave={saveCard}/>}
  </div>
 }
@@ -318,7 +326,7 @@ function DemoPage({pg,onSelection}){
 
 function PDFPage({pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus,onSelection,locked}){
  const pageRef=useRef(null),canvasRef=useRef(null),textRef=useRef(null),contextRef=useRef("");
- const penRef=useRef({active:false,points:[],spans:new Set(),pointerId:null});
+ const penRef=useRef({active:false,points:[],spans:new Set(),pointerId:null,scrollLeft:0,scrollTop:0,stage:null});
  const touchRef=useRef(new Map());
  const panRef=useRef({active:false,lastX:0,lastY:0});
  const[height,setHeight]=useState(800);
@@ -389,13 +397,17 @@ function PDFPage({pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus
  function penDown(e){
    if(e.pointerType!=="pen")return;
    e.preventDefault();
-   penRef.current={active:true,points:[],spans:new Set(),pointerId:e.pointerId};
+   const stage=pageRef.current?.parentElement;
+   penRef.current={active:true,points:[],spans:new Set(),pointerId:e.pointerId,scrollLeft:stage?.scrollLeft||0,scrollTop:stage?.scrollTop||0,stage};
+   if(stage){stage.classList.add("pencil-active");stage.scrollLeft=penRef.current.scrollLeft;stage.scrollTop=penRef.current.scrollTop}
    e.currentTarget.setPointerCapture?.(e.pointerId);
    updatePenVisual(e);
  }
  function penMove(e){
    if(!penRef.current.active||e.pointerType!=="pen")return;
    e.preventDefault();
+   const p=penRef.current;
+   if(p.stage){p.stage.scrollLeft=p.scrollLeft;p.stage.scrollTop=p.scrollTop}
    updatePenVisual(e);
  }
  function penUp(e){
@@ -403,6 +415,7 @@ function PDFPage({pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus
    if(!p.active||e.pointerType!=="pen")return;
    e.preventDefault();
    p.active=false;
+   if(p.stage){p.stage.classList.remove("pencil-active");p.stage.scrollLeft=p.scrollLeft;p.stage.scrollTop=p.scrollTop}
    e.currentTarget.releasePointerCapture?.(p.pointerId);
    const spans=[...p.spans];
    setTempRects([]);setPenTrace([]);
@@ -469,12 +482,38 @@ function PDFPage({pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus
  </div>
 }
 
-function SelectionBar({sel,suggestions,onCreate,onUse}){
+function AIAssistant({selection,onClose}){
+ const[q,setQ]=useState("");
+ const[answer,setAnswer]=useState("");
+ const[busy,setBusy]=useState(false);
+ async function ask(){
+   const question=q.trim()||"Explique-moi ce passage simplement, au niveau PASS, puis donne-moi les points à retenir.";
+   setBusy(true);setAnswer("");
+   try{
+     // This UI is ready for the secure server-side OpenAI connection.
+     // A static GitHub Pages app must not expose an OpenAI API key in the browser.
+     setAnswer("L’assistant IA est prêt à être connecté à OpenAI. Pour cette version statique, je n’envoie pas ta clé API depuis le navigateur afin de ne pas l’exposer.");
+   }finally{setBusy(false)}
+ }
+ return <div className="overlay" onClick={e=>{if(e.target===e.currentTarget)onClose()}}>
+  <div className="modal ai-modal">
+   <div className="mh"><div><small className="eyebrow">RMed IA</small><h2>Assistant du cours</h2></div><button onClick={onClose}><X size={18}/></button></div>
+   <div className="ai-source"><small>PASSAGE SÉLECTIONNÉ</small><p>{selection?.text||"Aucun passage sélectionné."}</p></div>
+   <textarea rows="3" value={q} onChange={e=>setQ(e.target.value)} placeholder="Explique, résume, crée une flashcard, donne-moi un piège de QCM…"/>
+   <button className="primary" onClick={ask} disabled={busy}>{busy?"Réflexion…":"Demander à l’IA"}</button>
+   {answer&&<div className="ai-answer">{answer}</div>}
+  </div>
+ </div>
+}
+
+
+function SelectionBar({sel,suggestions,onCreate,onUse,onAskAI}){
  return <div className="selection-bar">
   <div className="selection-main">
    <span>« {sel.text} »</span>
    <button className="highlight-action done"><Highlighter size={15}/> Surligné</button>
    <button className="primary" onClick={onCreate}><Sparkles size={15}/> Créer la carte</button>
+   <button className="ai-action" onClick={onAskAI}><Sparkles size={15}/> Assistant IA</button>
   </div>
   {suggestions?.length>0&&<><div className="suggestions-title"><Sparkles size={13}/> Formats proposés par RMed</div>
    <div className="suggestions-inline">{suggestions.map((s,i)=><button key={i} className="suggestion-mini" onClick={()=>onUse(s)}>{s.icon} {s.title}</button>)}</div>
