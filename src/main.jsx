@@ -611,7 +611,7 @@ function Home({cards,due,courses,nav,open}){const palette=["yellow","lavender","
  <section className="home-section">
   <div className="section-line"><div><span className="micro-label">TON RYTHME</span><h2>Cette semaine</h2></div><span>{cards.length} cartes créées</span></div>
   <div className="progress-board">
-   <div className="progress-board-left"><div className="progress-ring"><strong>{reviewPct}</strong><span>%</span></div><div><b>Ton terrain de jeu grandit.</b><p>{acquired} cartes bien acquises sur {cards.length || 0}. Continue doucement, mais régulièrement.</p></div></div>
+   <div className="progress-board-left"><div className="progress-ring" style={{"--progress":reviewPct+"%"}}><strong>{reviewPct}</strong><span>%</span></div><div><b>Ton terrain de jeu grandit.</b><p>{acquired} cartes bien acquises sur {cards.length || 0}. Continue doucement, mais régulièrement.</p></div></div>
    <div className="progress-spark"><span>↗</span><b>Rythme</b><small>{due ? "Quelques cartes t’attendent." : "Tout est à jour 🎉"}</small></div>
   </div>
  </section>
