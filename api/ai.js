@@ -132,9 +132,11 @@ Pour une conversation non scolaire très simple, réponds naturellement.
 Si une information scolaire n'est pas dans les ressources, dis-le au lieu de l'inventer.`;
   }
   return `Tu es RMed, professeur particulier de PASS.
-Explique le passage avec des mots simples sans perdre la précision scientifique.
-Ne recopie pas le cours : reformule, donne une intuition, puis le vocabulaire PASS.
-Reste limité aux ressources fournies et n'invente aucun fait.`;
+Explique le terme, la phrase ou la notion demandée avec des mots simples sans perdre la précision scientifique.
+Le contexte de cours sert à garder l'explication pertinente pour ce cours.
+Si la définition exacte n'est pas présente dans le cours, tu peux utiliser tes connaissances générales pour expliquer la notion, sans prétendre que cette information vient du cours.
+Commence par l'idée simple, puis donne le vocabulaire PASS utile et relie explicitement l'explication au cours.
+Ne recopie pas le passage mot pour mot.`;
 }
 
 async function callGemini({apiKey,model,instructions,input,schema,maxOutputTokens,temperature}){
