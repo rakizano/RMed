@@ -138,8 +138,10 @@ function App(){
 
  function onSelection(selection){
    if(!selection?.text)return;
-   setSel({...selection,highlightId:null});
-   makeSuggestions(selection);
+   const hId=selection.autoHighlight?addHighlight(selection):null;
+   const next={...selection,highlightId:hId};
+   setSel(next);
+   makeSuggestions(next);
  }
 
  function openCreator(selection=sel){
@@ -246,6 +248,7 @@ function DemoPage({pg,onSelection}){
 
 function PDFPage({pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus,onSelection}){
  const pageRef=useRef(null),canvasRef=useRef(null),textRef=useRef(null),contextRef=useRef("");
+ const penRef=useRef({active:false,points:[],spans:new Set(),pointerId:null});
  const[height,setHeight]=useState(800);
 
  useEffect(()=>{let cancelled=false;
@@ -271,6 +274,7 @@ function PDFPage({pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus
      const fontHeight=Math.hypot(tx[2],tx[3]);
      const angle=Math.atan2(tx[1],tx[0]);
      span.textContent=item.str;
+     span.className="pdf-word";
      span.style.left=tx[4]+"px";span.style.top=(tx[5]-fontHeight)+"px";
      span.style.fontSize=fontHeight+"px";span.style.fontFamily=item.fontName||"sans-serif";
      span.style.transform="rotate("+angle+"rad)";
@@ -282,7 +286,40 @@ function PDFPage({pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus
  return()=>{cancelled=true};
  },[pdfDoc,pageNumber,scale]);
 
+ function addPenPoint(e){
+   const p=penRef.current;
+   const els=document.elementsFromPoint(e.clientX,e.clientY);
+   els.forEach(el=>{if(el.classList?.contains("pdf-word"))p.spans.add(el)});
+   p.points.push({x:e.clientX,y:e.clientY});
+ }
+
+ function penDown(e){
+   if(e.pointerType!=="pen")return;
+   e.preventDefault();
+   penRef.current={active:true,points:[],spans:new Set(),pointerId:e.pointerId};
+   e.currentTarget.setPointerCapture?.(e.pointerId);
+   addPenPoint(e);
+ }
+ function penMove(e){
+   if(!penRef.current.active||e.pointerType!=="pen")return;
+   e.preventDefault();
+   addPenPoint(e);
+ }
+ function penUp(e){
+   const p=penRef.current;
+   if(!p.active||e.pointerType!=="pen")return;
+   e.preventDefault();
+   p.active=false;
+   const spans=[...p.spans];
+   if(!spans.length)return;
+   const root=pageRef.current.getBoundingClientRect();
+   const rects=spans.map(el=>{const r=el.getBoundingClientRect();return{x:r.left-root.left,y:r.top-root.top,width:r.width,height:r.height,order:[...textRef.current.children].indexOf(el)}}).filter(r=>r.width>1&&r.height>1).sort((a,b)=>a.order-b.order);
+   const text=spans.map(el=>el.textContent).join(" ").replace(/\s+/g," ").trim();
+   onSelection({text,rects:rects.map(({order,...r})=>r),context:contextRef.current,autoHighlight:true});
+ }
+
  function select(){
+   if(penRef.current.active)return;
    const s=window.getSelection();if(!s||s.isCollapsed||!textRef.current)return;
    if(!textRef.current.contains(s.anchorNode))return;
    const t=s.toString().trim();if(!t)return;
@@ -291,49 +328,9 @@ function PDFPage({pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus
    onSelection({text:t,rects,context:contextRef.current});
    s.removeAllRanges();
  }
- return <div className="pdf-stage"><div className="pdf-page" ref={pageRef} style={{height}} onMouseUp={select} onTouchEnd={select}>
+ return <div className="pdf-stage"><div className="pdf-page" ref={pageRef} style={{height}} onPointerDown={penDown} onPointerMove={penMove} onPointerUp={penUp} onPointerCancel={penUp} onMouseUp={select}>
    <canvas ref={canvasRef}/>
    <div className="pdf-highlights">{highlights.map(h=><div key={h.id} id={"hl-"+h.id} className="highlight-group" onClick={()=>onSelection({text:h.text,rects:h.rects,context:h.context,highlightId:h.id})}>{h.rects.map((r,i)=><span key={i} style={{left:r.x,top:r.y,width:r.width,height:r.height}}/> )}</div>)}</div>
    <div className="pdf-text" ref={textRef}/>
  </div></div>
 }
-
-function SelectionBar({sel,suggestions,highlighted,onHighlight,onCreate,onUse}){
- return <div className="selection-bar"><div className="selection-main"><Highlighter size={17}/><b>Passage sélectionné</b><span>« {sel.text} »</span><button className={"highlight-action "+(highlighted?"done":"")} onClick={onHighlight} disabled={highlighted}>{highlighted?"✓ Surligné":"Surligner"}</button><button className="primary" onClick={onCreate}><Plus/>Créer une flashcard</button></div><div className="suggestions-title"><Sparkles size={14}/> Choisis un format proposé par RMed</div><div className="suggestions-inline">{suggestions.map(s=><button key={s.type} className="suggestion-mini" onClick={()=>onUse(s)}><span>{s.icon}</span><b>{s.title}</b></button>)}</div></div>
-}
-
-function Cards({cards,search,open,del}){
- const arr=cards.filter(c=>(c.front+" "+c.back).toLowerCase().includes(search.toLowerCase()));
- return <div className="page"><div className="title"><h1>Flashcards</h1><span>{cards.length} cartes</span></div>{arr.length?<div className="list">{arr.map(c=><div className="cardrow" key={c.id}><span className="emoji">{c.type==="cloze"?"🧩":c.type==="concept"?"💡":"❓"}</span><div><b>{c.front}</b><p>{c.back}</p><small>Page {c.page} • {c.type==="cloze"?"Texte à trous":c.type==="concept"?"Concept":"Question / réponse"} • passage lié</small></div><button onClick={()=>open(c)}>Voir source</button><button className="danger" onClick={()=>del(c.id)}><Trash2/></button></div>)}</div>:<Empty text="Aucune flashcard pour l’instant."/>}</div>
-}
-
-function UploadModal({onClose,onFile}){
- const[inputRef]=useState(()=>({current:null}));
- const ref=useRef(null);
- const[drag,setDrag]=useState(false);
- function pick(files){const f=files?.[0];if(f)onFile(f)}
- return <div className="overlay"><div className="modal upload-modal"><div className="mh"><div><small className="eyebrow">AJOUTER UN DOCUMENT</small><h2>Importer un PDF</h2></div><button onClick={onClose}><X/></button></div><div className="upload-tabs"><button className="active">Télécharger des fichiers</button><button disabled>Intégrer un lien</button></div><div className={"dropzone "+(drag?"drag":"")} onDragOver={e=>{e.preventDefault();setDrag(true)}} onDragLeave={()=>setDrag(false)} onDrop={e=>{e.preventDefault();setDrag(false);pick(e.dataTransfer.files)}} onClick={()=>ref.current?.click()}><Upload size={28}/><b>Dépose ton PDF ici</b><span>ou appuie pour choisir un fichier</span><small>PDF • lecture et surlignage directement dans RMed</small><input ref={ref} type="file" accept=".pdf,application/pdf" onChange={e=>pick(e.target.files)}/></div><div className="upload-note">Après import, le PDF s’ouvre à droite et tes flashcards restent associées à la page et au passage sélectionné.</div></div></div>
-}
-
-function CardModal({draft,setDraft,suggestions,onUse,onClose,onSave}){
- return <div className="overlay"><div className="modal modal-large"><div className="mh"><div><small className="eyebrow">ASSISTANT DE FORMULATION</small><h2>Créer ma flashcard</h2></div><button onClick={onClose}><X/></button></div>
- <div className="source"><b>Passage source</b><p>« {draft?.source} »</p><small>La carte reste reliée au PDF et à sa page.</small></div>
- <div className="ai-title"><Sparkles size={18}/>3 formats possibles</div>
- <div className="suggestion-grid">{suggestions.map(s=><button key={s.type} className={"suggestion-card "+(draft?.type===s.type?"chosen":"")} onClick={()=>setDraft({...s,highlightId:draft.highlightId,source:draft.source,page:draft.page})}><span className="suggestion-icon">{s.icon}</span><b>{s.title}</b><small>{s.front}</small><em>Utiliser ce format</em></button>)}</div>
- <label>Question / recto<input value={draft?.front||""} onChange={e=>setDraft({...draft,front:e.target.value})}/></label>
- <label>Réponse / verso<textarea rows="4" value={draft?.back||""} onChange={e=>setDraft({...draft,back:e.target.value})}/></label>
- <div className="ai"><Sparkles size={18}/><span>Ces 3 formulations sont proposées automatiquement. La connexion à une vraie IA générative sera ajoutée côté serveur pour ne jamais exposer de clé API dans le navigateur.</span></div>
- <div className="actions"><button onClick={onClose}>Annuler</button><button className="primary" onClick={onSave}>Créer la carte</button></div>
- </div></div>
-}
-
-function Review({rc,revealed,setRevealed,rate,total,i}){
- if(!rc)return <div className="page empty"><Brain/><h2>Tout est à jour 🎉</h2><p>Aucune flashcard à réviser pour le moment.</p></div>;
- return <div className="page review"><div className="title"><div><small>RÉVISION ACTIVE</small><h1>Carte {Math.min(i+1,total)}/{total}</h1></div><span className="pill">5 niveaux de maîtrise</span></div><section className="reviewcard"><small>{rc.type==="cloze"?"TEXTE À TROUS":rc.type==="concept"?"CONCEPT":"QUESTION"}</small><h2>{rc.front}</h2>{revealed?<><div className="answer">{rc.back}</div><p>Comment tu maîtrises cette carte ?</p><div className="levels">{levels.map(x=><button key={x[0]} onClick={()=>rate(x[0])}><span>{x[1]}</span><b>{x[2]}</b></button>)}</div></>:<button className="primary reveal" onClick={()=>setRevealed(true)}>Afficher la réponse</button>}</section></div>
-}
-
-function QCM({cards,qcm,setQcm}){if(!qcm)return <div className="page empty"><ListChecks/><h2>QCM basé sur tes cartes</h2><p>Une question simple est générée à partir de ton contenu.</p><button className="primary" onClick={()=>setQcm(cards[0]?{q:cards[0].front,a:cards[0].back}:null)}>Commencer</button>{!cards.length&&<small>Crée d’abord une flashcard.</small>}</div>;return <div className="page"><div className="title"><h1>QCM</h1><button onClick={()=>setQcm(null)}>Quitter</button></div><section className="panel qcm"><small>QUESTION</small><h2>{qcm.q}</h2><button onClick={()=>alert("Réponse : "+qcm.a)}>Afficher la correction</button></section></div>}
-function HistoryPage({h}){return <div className="page"><div className="title"><h1>Historique</h1><span>{h.length} révisions</span></div>{h.length?<div className="list">{h.map(x=><div className="history" key={x.id}><span>{levels.find(l=>l[0]===x.level)?.[1]}</span><div><b>{x.card}</b><small>{new Date(x.date).toLocaleString("fr-FR")}</small></div></div>)}</div>:<Empty text="Ton historique apparaîtra ici."/>}</div>}
-function Empty({text}){return <div className="empty"><Clock3/><p>{text}</p></div>}
-function StatMini(){return null}
-createRoot(document.getElementById("root")).render(<App/>);
