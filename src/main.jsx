@@ -85,6 +85,7 @@ function App(){
  const[pageNumber,setPageNumber]=useState(1);
  const[pdfDoc,setPdfDoc]=useState(null);
  const[pdfLoading,setPdfLoading]=useState(false);
+ const[pdfError,setPdfError]=useState("");
  const[zoom,setZoom]=useState(1.25);
  const[sel,setSel]=useState(null);
  const[focusHighlightId,setFocusHighlightId]=useState(null);
@@ -108,17 +109,27 @@ function App(){
  const rc=due[ri];
 
  async function loadPdf(c){
-   if(c.kind!=="pdf"){setPdfDoc(null);return}
-   setPdfLoading(true);
+   if(c.kind!=="pdf"){setPdfDoc(null);setPdfError("");return}
+   setPdfLoading(true);setPdfError("");setPdfDoc(null);
    try{
-     if(pdfCache.current.has(c.id)){setPdfDoc(pdfCache.current.get(c.id));return}
+     if(pdfCache.current.has(c.id)){
+       setPdfDoc(pdfCache.current.get(c.id));
+       return;
+     }
      const data=await getPdf(c.id);
-     if(!data){setPdfDoc(null);return}
+     if(!data){
+       throw new Error("Ce PDF n’est pas stocké dans Safari. Réimporte-le depuis cet appareil.");
+     }
      const doc=await openPdfDocument(data);
      pdfCache.current.set(c.id,doc);
      setPdfDoc(doc);
-   }catch(err){console.error(err);setPdfDoc(null)}
-   finally{setPdfLoading(false)}
+   }catch(err){
+     console.error("RMed PDF open error:",err);
+     setPdfDoc(null);
+     setPdfError(err?.message||"Impossible d’ouvrir le PDF.");
+   }finally{
+     setPdfLoading(false);
+   }
  }
 
  async function open(c,pg=1,focus=null){
@@ -141,7 +152,7 @@ function App(){
      await savePdf(id,buffer);
      pdfCache.current.set(id,doc);
      setCourses(x=>[...x,c]);
-     setCourse(c);setPageNumber(1);setPdfDoc(doc);setTab("course");setUploadOpen(false);
+     setCourse(c);setPageNumber(1);setPdfDoc(doc);setPdfError("");setTab("course");setUploadOpen(false);
    }catch(err){console.error("PDF import error:",err);alert("Impossible d’ouvrir ce PDF. "+(err?.message||"Erreur inconnue"))}
    finally{setPdfLoading(false)}
  }
@@ -235,7 +246,7 @@ function App(){
    <header><b className="mobile">RMed</b><div className="search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher…"/></div><div className="avatar">R</div></header>
 
    {tab==="home"&&<Home cards={cards} due={due.length} courses={courses} nav={nav} open={open}/>}
-   {tab==="course"&&<Course openUpload={()=>setUploadOpen(true)} course={course} pageNumber={pageNumber} setPageNumber={setPageNumber} pdfDoc={pdfDoc} pdfLoading={pdfLoading} zoom={zoom} setZoom={setZoom} sel={sel} suggestions={suggestions} onSelection={onSelection} openCreator={openCreator} applySuggestion={applySuggestion} pdfLocked={pdfLocked} highlights={highlights.filter(h=>h.courseId===course.id&&h.page===pageNumber)} focusHighlightId={focusHighlightId} clearFocus={()=>setFocusHighlightId(null)} importPdf={importPdf} courses={courses} open={open}/>}
+   {tab==="course"&&<Course openUpload={()=>setUploadOpen(true)} course={course} pageNumber={pageNumber} setPageNumber={setPageNumber} pdfDoc={pdfDoc} pdfLoading={pdfLoading} pdfError={pdfError} zoom={zoom} setZoom={setZoom} sel={sel} suggestions={suggestions} onSelection={onSelection} openCreator={openCreator} applySuggestion={applySuggestion} pdfLocked={pdfLocked} highlights={highlights.filter(h=>h.courseId===course.id&&h.page===pageNumber)} focusHighlightId={focusHighlightId} clearFocus={()=>setFocusHighlightId(null)} importPdf={importPdf} courses={courses} open={open}/>}
    {tab==="cards"&&<Cards cards={cards} search={search} open={openCardSource} del={deleteCard}/>}
    {tab==="review"&&<Review rc={rc} revealed={revealed} setRevealed={setRevealed} rate={rate} total={due.length} i={ri}/>}
    {tab==="qcm"&&<QCM cards={cards} qcm={qcm} setQcm={setQcm}/>}
@@ -251,7 +262,7 @@ function Nav({icon,t,a,f}){return <button className={a?"nav active":"nav"} onCli
 function Home({cards,due,courses,nav,open}){return <div className="page"><section className="hero"><div><small>TON ESPACE DE RÉVISION</small><h1>Travaille ton cours au moment où tu le lis.</h1><p>Surligne → crée ta flashcard → garde le lien vers le passage exact → révise.</p><button className="primary" onClick={()=>nav("course")}>Ouvrir un cours <ChevronRight/></button></div><div className="bigdog">🐶</div></section><div className="stats"><Stat n={courses.length} t="Cours"/><Stat n={cards.length} t="Flashcards"/><Stat n={due} t="À réviser"/><Stat n={cards.filter(c=>c.level==="perfect"||c.level==="good").length} t="Bien acquis"/></div><div className="grid"><section className="panel"><h3>Continuer</h3>{courses.map(c=><button className="course" key={c.id} onClick={()=>open(c)}><FileText/><div><b>{c.title}</b><small>{c.pages.length} page(s){c.kind==="pdf"?" • PDF réel":""}</small></div><ChevronRight/></button>)}</section><section className="panel"><h3>Actions rapides</h3><div className="quick"><button onClick={()=>nav("review")}><Brain/>Réviser</button><button onClick={()=>nav("qcm")}><ListChecks/>Faire un QCM</button><button onClick={()=>nav("cards")}><Target/>Mes flashcards</button></div></section></div></div>}
 function Stat({n,t}){return <div className="stat"><strong>{n}</strong><span>{t}</span></div>}
 
-function Course({course,pageNumber,setPageNumber,pdfDoc,pdfLoading,zoom,setZoom,sel,suggestions,onSelection,openCreator,applySuggestion,pdfLocked,setPdfLocked,highlights,focusHighlightId,clearFocus,importPdf,courses,open,openUpload}){
+function Course({course,pageNumber,setPageNumber,pdfDoc,pdfLoading,pdfError,zoom,setZoom,sel,suggestions,onSelection,openCreator,applySuggestion,pdfLocked,setPdfLocked,highlights,focusHighlightId,clearFocus,importPdf,courses,open,openUpload}){
  const pg=course.pages.find(x=>x.n===pageNumber)||course.pages[0];
  const prev=()=>setPageNumber(Math.max(1,pageNumber-1));
  const next=()=>setPageNumber(Math.min(course.pages.length,pageNumber+1));
@@ -265,7 +276,8 @@ function Course({course,pageNumber,setPageNumber,pdfDoc,pdfLoading,zoom,setZoom,
   <section className="pdf-reader">
    <div className="pdf-toolbar"><button className={"tool-label "+(pdfLocked?"locked":"")} onClick={()=>setPdfLocked(v=>!v)} title={pdfLocked?"Déverrouiller le déplacement du PDF":"Verrouiller le déplacement du PDF"}>{pdfLocked?<Lock/>:<Unlock/>}<span>{pdfLocked?"PDF verrouillé":"Verrouiller PDF"}</span></button><button onClick={prev} disabled={pageNumber<=1}><ChevronLeft/></button><span>Page <b>{pageNumber}</b> / {course.pages.length}</span><button onClick={next} disabled={pageNumber>=course.pages.length}><ChevronRight/></button><span className="spacer"/><button onClick={()=>setZoom(z=>Math.max(.75,z-.1))}><Minus/></button><span>{Math.round(zoom*100)}%</span><button onClick={()=>setZoom(z=>Math.min(2.5,z+.1))}><Plus/></button></div>
    {pdfLoading&&<div className="pdf-state">Ouverture du PDF…</div>}
-   {course.kind==="pdf"&&pdfDoc?<PDFPage pdfDoc={pdfDoc} pageNumber={pageNumber} scale={zoom} highlights={highlights} focusHighlightId={focusHighlightId} clearFocus={clearFocus} onSelection={onSelection} locked={pdfLocked}/>:course.kind==="demo"?<DemoPage pg={pg} onSelection={onSelection}/>:<div className="pdf-state">PDF indisponible. Réimporte-le pour continuer.</div>}
+   {pdfError&&<div className="pdf-state pdf-error"><b>Impossible d’ouvrir ce PDF</b><br/>{pdfError}<br/><button className="primary" onClick={openUpload}>Réimporter le PDF</button></div>}
+   {!pdfLoading&&!pdfError&&course.kind==="pdf"&&pdfDoc?<PDFPage pdfDoc={pdfDoc} pageNumber={pageNumber} scale={zoom} highlights={highlights} focusHighlightId={focusHighlightId} clearFocus={clearFocus} onSelection={onSelection} locked={pdfLocked}/>:course.kind==="demo"?<DemoPage pg={pg} onSelection={onSelection}/>:<div className="pdf-state">PDF indisponible. Réimporte-le pour continuer.</div>}
    {sel&&<SelectionBar sel={sel} suggestions={suggestions} onHighlight={()=>{}} onCreate={()=>openCreator(sel)} onUse={applySuggestion}/>}
   </section>
  </div></div>
