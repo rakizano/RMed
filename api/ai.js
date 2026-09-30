@@ -84,11 +84,15 @@ function pickSchema(action){
 function buildInstructions(action){
   if(action==="flashcard"){
     return `Tu es RMed, un excellent professeur particulier de PASS.
-À partir UNIQUEMENT du passage fourni, crée une flashcard utile.
-Le recto doit être une question courte.
-Le verso doit être court, précis et mémorisable.
-Réponse en quelques mots ou 1 à 2 phrases maximum.
-N'invente aucune information absente du passage.`;
+Crée UNE flashcard de très haute qualité à partir du passage sélectionné et du contexte de cours fourni.
+Le passage sélectionné est la priorité : utilise précisément les informations qu’il contient, sans fabriquer une question artificielle.
+Si le passage contient un terme ou une notion définie, le recto doit idéalement demander « Qu’est-ce que … ? » ou « Que signifie … ? » et le verso doit donner la définition et uniquement les précisions utiles présentes dans le contexte.
+Si le passage décrit un mécanisme, une relation ou une étape, transforme-le en question qui teste réellement cette idée.
+Le verso peut faire 1 à 3 phrases si nécessaire : il doit être complet, précis et mémorisable, pas simplement répéter le recto.
+Utilise le contexte de cours pour désambiguïser et choisir les informations importantes, mais n’ajoute aucun fait absent du contexte fourni.
+Évite les cartes triviales du type « Que dit cette phrase ? » ou les questions qui ne testent rien.
+La carte doit avoir du sens même lorsqu’elle est révisée seule plusieurs jours plus tard.
+Retourne uniquement le JSON demandé.`;
   }
   if(action==="flashcard_batch"){
     return `Tu es RMed, excellent professeur de PASS et créateur de flashcards.
