@@ -1,6 +1,6 @@
 import React,{useEffect,useMemo,useRef,useState}from"react";
 import{createRoot}from"react-dom/client";
-import{BookOpen,Brain,ChevronLeft,ChevronRight,Clock3,FileText,Folder,FolderPlus,History,Home as HomeIcon,ListChecks,Minus,Plus,Search,Sparkles,Target,Trash2,Upload,X,Highlighter,ExternalLink,ArrowLeft,MousePointer2,Hand,Eraser}from"lucide-react";
+import{BookOpen,Brain,ChevronLeft,ChevronRight,FileText,Folder,FolderPlus,History,Home as HomeIcon,ListChecks,Minus,Plus,Search,Sparkles,Target,Trash2,Upload,X,Highlighter,ExternalLink,ArrowLeft,MousePointer2,Hand,Eraser}from"lucide-react";
 import pdfWorkerUrl from"pdfjs-dist/build/pdf.worker.min.js?url";
 import"./styles.css";
 
