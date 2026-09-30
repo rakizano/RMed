@@ -1322,3 +1322,28 @@
     min-height:0;
   }
 }
+
+
+/* Wikipedia-first explanations */
+.wikipedia-result{
+  background:#fafafa;
+  border:1px solid #e2e4ea;
+  border-radius:12px;
+  padding:14px;
+  margin:4px 0 14px;
+}
+.wikipedia-label{
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.08em;
+  color:#6b7280;
+  margin-bottom:5px;
+}
+.wikipedia-result h3{margin:0 0 7px;font-size:18px;color:#20232b}
+.wikipedia-result p{margin:0;color:#4f5665;line-height:1.55;font-size:13px}
+.explain-wikipedia-link{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  text-decoration:none;
+}
