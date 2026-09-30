@@ -23,12 +23,16 @@ const dbPromise=typeof indexedDB==="undefined"?Promise.resolve(null):new Promise
  req.onerror=()=>reject(req.error);
 });
 async function savePdf(id,data){
- const db=await dbPromise;if(!db)return;
- await new Promise((res,rej)=>{const tx=db.transaction("pdfs","readwrite");tx.objectStore("pdfs").put(data,id);tx.oncomplete=res;tx.onerror=()=>rej(tx.error)});
+ try{
+   const db=await dbPromise;if(!db)return;
+   await new Promise((res,rej)=>{const tx=db.transaction("pdfs","readwrite");tx.objectStore("pdfs").put(data,id);tx.oncomplete=res;tx.onerror=()=>rej(tx.error)});
+ }catch(err){console.warn("PDF storage unavailable",err)}
 }
 async function getPdf(id){
- const db=await dbPromise;if(!db)return null;
- return await new Promise((res,rej)=>{const tx=db.transaction("pdfs","readonly");const r=tx.objectStore("pdfs").get(id);r.onsuccess=()=>res(r.result||null);r.onerror=()=>rej(r.error)});
+ try{
+   const db=await dbPromise;if(!db)return null;
+   return await new Promise((res,rej)=>{const tx=db.transaction("pdfs","readonly");const r=tx.objectStore("pdfs").get(id);r.onsuccess=()=>res(r.result||null);r.onerror=()=>rej(r.error)});
+ }catch(err){console.warn("PDF storage unavailable",err);return null}
 }
 async function deletePdf(id){
  const db=await dbPromise;if(!db)return;
@@ -100,7 +104,7 @@ function App(){
      pdfCache.current.set(id,doc);
      setCourses(x=>[...x,c]);
      setCourse(c);setPageNumber(1);setPdfDoc(doc);setTab("course");setUploadOpen(false);
-   }catch(err){console.error(err);alert("Impossible d’ouvrir ce PDF.")}
+   }catch(err){console.error(err);alert("Impossible d’ouvrir ce PDF. Vérifie qu’il s’agit bien d’un fichier PDF valide.")}
    finally{setPdfLoading(false)}
  }
 
