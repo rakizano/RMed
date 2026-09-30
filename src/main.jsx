@@ -388,7 +388,7 @@ function App(){
    {tab==="course"&&<Course openUpload={()=>setUploadOpen(true)} course={course} pageNumber={pageNumber} setPageNumber={setPageNumber} pdfDoc={pdfDoc} pdfNativeUrl={pdfNativeUrl} pdfLoading={pdfLoading} pdfError={pdfError} zoom={zoom} setZoom={setZoom} sel={sel} suggestions={suggestions} onSelection={onSelection} openCreator={openCreator} applySuggestion={applySuggestion} pdfLocked={pdfLocked} setPdfLocked={setPdfLocked} highlights={highlights.filter(h=>h.courseId===course.id&&h.page===pageNumber)} focusHighlightId={focusHighlightId} clearFocus={()=>setFocusHighlightId(null)} importPdf={file=>addPdf(file,activeFolderId)} courses={courses} folders={folders} activeFolderId={activeFolderId} setActiveFolderId={setActiveFolderId} onCreateFolder={createFolder} open={open} onEraseHighlight={eraseHighlight} onAskAI={()=>setAiOpen(true)}/>}
    {tab==="cards"&&<Cards cards={cards} search={search} open={openCardSource} del={deleteCard} edit={editCard}/>}
    {tab==="review"&&<Review rc={rc} revealed={revealed} setRevealed={setRevealed} rate={rate} total={due.length} i={ri}/>}
-   {tab==="qcm"&&<QCM courses={courses} cards={cards} qcm={qcm} setQcm={setQcm}/>}
+   {tab==="qcm"&&<QCM courses={courses} course={course} cards={cards} qcm={qcm} setQcm={setQcm}/>}
    {tab==="ai"&&<AIChat courses={courses} course={course} selection={sel}/>}
    {tab==="history"&&<HistoryPage h={history}/>}
   </main>
@@ -1206,7 +1206,7 @@ function Review({rc,revealed,setRevealed,rate,total,i}){
 }
 
 
-function QCM({courses,cards,qcm,setQcm}){
+function QCM({courses,course,cards,qcm,setQcm}){
  const[scope,setScope]=useState("all");
  const[loading,setLoading]=useState(false);
  const[error,setError]=useState("");
@@ -1215,7 +1215,7 @@ function QCM({courses,cards,qcm,setQcm}){
  async function generate(){
   setLoading(true);setError("");
   try{
-   const currentCourse=scope==="course"?courses[0]:null;
+   const currentCourse=scope==="course"?course:null;
    const context=await buildResourceContext(courses,{courseId:currentCourse?.id||null,limit:15000});
    if(!context.trim())throw new Error("Aucune ressource exploitable n’est disponible. Ajoute d’abord un cours ou un PDF.");
    const data=await callRMedAI({action:"qcm_session",text:"Génère exactement 30 questions de QCM PASS à partir uniquement des ressources ci-dessous.",context});
