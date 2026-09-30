@@ -8,3 +8,8 @@
 .pdf-page.pen-active{touch-action:none}
 .live-highlight{z-index:3}
 .live-highlight span{background:#ffe66d99!important;transition:all .03s linear}
+
+.pdf-stage{touch-action:none;overflow-x:auto;overflow-y:auto}
+.pdf-stage-locked{touch-action:none;overflow:hidden}
+.pen-trace{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:4}
+.live-highlight{z-index:3}
