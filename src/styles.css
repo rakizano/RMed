@@ -52,3 +52,25 @@
  .annotation-palette{right:-4px;top:38px}
  .annotation-palette button{width:30px!important;height:30px!important}
 }
+
+
+/* Apple Pencil: Pencil gestures are handled by pointer events and must never scroll the PDF. */
+.pdf-stage,
+.pdf-stage.pencil-active,
+.pdf-page,
+.pdf-text{
+  touch-action:none !important;
+}
+.pdf-stage.pencil-active{
+  overflow:auto;
+  overscroll-behavior:none !important;
+}
+.pdf-stage.pencil-active .pdf-text,
+.pdf-stage.pencil-active .pdf-word{
+  -webkit-user-select:none;
+  user-select:none;
+}
+.live-highlight span{
+  background:var(--rmed-live-highlight, #ffe66d99)!important;
+  pointer-events:none!important;
+}
