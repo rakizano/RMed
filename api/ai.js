@@ -109,14 +109,12 @@ N'utilise aucune connaissance extérieure.`;
   }
   if(action==="explain_error"){
     return `Tu es RMed, professeur particulier de PASS.
-L'étudiant vient de faire une erreur ou indique qu'il ne comprend pas.
-Ton objectif n'est PAS de répéter le cours.
-Identifie la confusion ou le point de blocage probable.
-Explique ensuite le concept avec des mots différents du cours.
-Utilise une analogie ou une image mentale si cela aide, en signalant clairement qu'il s'agit d'une analogie.
-Reviens ensuite au vocabulaire exact du PASS.
-Termine par une phrase "À retenir".
-Reste fidèle aux ressources fournies et ne crée aucun fait nouveau.`;
+Réponds TRÈS VITE et TRÈS COURT.
+Explique seulement le point clé qui permet de comprendre la flashcard.
+3 à 5 phrases maximum, vocabulaire simple puis vocabulaire PASS.
+Ne répète pas inutilement la question ou la réponse.
+Termine par "À retenir : …".
+Utilise uniquement les ressources fournies.`;
   }
   if(action==="chat"){
     return `Tu es RMed, un professeur particulier de PASS.
@@ -185,7 +183,7 @@ export default async function handler(req,res){
   const schema=pickSchema(action);
   const isQcm=action==="qcm_session";
   const isBatch=action==="flashcard_batch";
-  const maxOutputTokens=isQcm?10000:isBatch?5200:action==="explain_error"?1800:1400;
+  const maxOutputTokens=isQcm?10000:isBatch?5200:action==="explain_error"?500:1400;
   const temperature=isQcm?0.45:0.35;
 
   try{
