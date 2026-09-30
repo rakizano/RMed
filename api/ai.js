@@ -226,7 +226,7 @@ async function fetchJson(url,options,timeoutMs=45000){
   }finally{clearTimeout(timer)}
 }
 
-async function callGemini({apiKey,models,instructions,input,schema,maxOutputTokens,temperature}){
+async function callGemini({apiKey,models,instructions,input,action,schema,maxOutputTokens,temperature}){
   let last=null;
   for(const model of models){
     try{
@@ -246,7 +246,7 @@ async function callGemini({apiKey,models,instructions,input,schema,maxOutputToke
       });
       if(upstream.ok){
         const parsed=parseJson(textFromGemini(data));
-        if(validateParsed("flashcard",parsed)||validateParsed("flashcard_batch",parsed)||validateParsed("qcm_session",parsed)||validateParsed("explain_error",parsed)||validateParsed("chat",parsed)||validateParsed("explain",parsed)){
+        if(validateParsed(action,parsed)){
           return {ok:true,data,model};
         }
         last={status:502,message:"Réponse Gemini invalide."};
