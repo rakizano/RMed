@@ -367,4 +367,76 @@ function PDFPage({pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus
 }
 
 
+function SelectionBar({sel,suggestions,onCreate,onUse}){
+ return <div className="selection-bar">
+  <div className="selection-main">
+   <span>« {sel.text} »</span>
+   <button className="highlight-action done"><Highlighter size={15}/> Surligné</button>
+   <button className="primary" onClick={onCreate}><Sparkles size={15}/> Créer la carte</button>
+  </div>
+  {suggestions?.length>0&&<><div className="suggestions-title"><Sparkles size={13}/> Formats proposés par RMed</div>
+   <div className="suggestions-inline">{suggestions.map((s,i)=><button key={i} className="suggestion-mini" onClick={()=>onUse(s)}>{s.icon} {s.title}</button>)}</div>
+  </>}
+ </div>
+}
+
+function UploadModal({onClose,onFile}){
+ const inputRef=useRef(null);
+ return <div className="overlay" onClick={e=>{if(e.target===e.currentTarget)onClose()}}>
+  <div className="modal upload-modal">
+   <div className="mh"><div><small className="eyebrow">BIBLIOTHÈQUE</small><h2>Importer un cours</h2></div><button onClick={onClose}><X size={18}/></button></div>
+   <div className="upload-tabs"><button className="active">PDF</button><button disabled>Notes</button></div>
+   <label className="dropzone" onClick={()=>inputRef.current?.click()}>
+    <Upload size={30}/>
+    <b>Choisir un PDF</b>
+    <span>Ton cours sera ajouté à RMed et lisible directement ici.</span>
+    <small>PDF uniquement</small>
+    <input ref={inputRef} type="file" accept="application/pdf,.pdf" onChange={e=>onFile(e.target.files?.[0])}/>
+   </label>
+   <div className="upload-note">Le fichier reste stocké localement dans ce navigateur pour cette version.</div>
+  </div>
+ </div>
+}
+
+function CardModal({draft,setDraft,suggestions,onUse,onClose,onSave}){
+ return <div className="overlay" onClick={e=>{if(e.target===e.currentTarget)onClose()}}>
+  <div className="modal">
+   <div className="mh"><div><small className="eyebrow">FLASHCARD</small><h2>Créer ta carte</h2></div><button onClick={onClose}><X size={18}/></button></div>
+   {suggestions?.length>0&&<div className="suggestion-grid">{suggestions.map((s,i)=><button key={i} className={"suggestion-card "+(draft?.type===s.type?"chosen":"")} onClick={()=>onUse(s)}><span className="suggestion-icon">{s.icon}</span><b>{s.title}</b><small>{s.front}</small><em>Utiliser ce format</em></button>)}</div>}
+   <label>Recto<textarea rows="3" value={draft?.front||""} onChange={e=>setDraft(d=>({...d,front:e.target.value}))}/></label>
+   <label>Verso<textarea rows="4" value={draft?.back||""} onChange={e=>setDraft(d=>({...d,back:e.target.value}))}/></label>
+   <div className="source"><small>Source • page {draft?.page||"—"}</small><p>{draft?.source||"Passage sélectionné"}</p></div>
+   <div className="ai"><Sparkles size={16}/><span>RMed garde le lien avec le passage exact du cours.</span></div>
+   <div className="actions"><button onClick={onClose}>Annuler</button><button className="primary" onClick={onSave}>Enregistrer</button></div>
+  </div>
+ </div>
+}
+
+function Cards({cards,search,open,del}){
+ const filtered=cards.filter(c=>(c.front+" "+c.back+" "+(c.source||"")).toLowerCase().includes((search||"").toLowerCase()));
+ return <div className="page"><div className="title"><div><small>MA BIBLIOTHÈQUE</small><h1>Mes flashcards</h1></div></div>
+  {filtered.length?<div className="list">{filtered.map(c=><div className="cardrow" key={c.id}><span className="emoji">{c.type==="cloze"?"🧩":c.type==="concept"?"💡":"❓"}</span><div><b>{c.front}</b><p>{c.back}</p><small>Page {c.page} • {c.level||"À réviser"}</small></div><button onClick={()=>open(c)}>Source</button><button className="danger" onClick={()=>del(c.id)}><Trash2 size={16}/></button></div>)}</div>:<div className="panel empty"><Brain size={35}/><p>Aucune flashcard pour l’instant.</p></div>}
+ </div>
+}
+
+function Review({rc,revealed,setRevealed,rate,total,i}){
+ if(!rc)return <div className="page"><div className="panel empty"><Brain size={40}/><h2>Tout est à jour 🎉</h2><p>Aucune carte à réviser maintenant.</p></div></div>;
+ return <div className="page review"><div className="title"><div><small>RÉVISION ACTIVE</small><h1>Réviser</h1></div><span className="pill">{Math.min(i+1,total)}/{total}</span></div>
+  <div className="reviewcard"><small>{rc.type==="cloze"?"TEXTE À TROUS":"QUESTION"}</small><h2>{rc.front}</h2>{revealed?<><div className="answer">{rc.back}</div><div className="levels">{levels.map(l=><button key={l[0]} onClick={()=>rate(l[0])}><span>{l[1]}</span><b>{l[2]}</b></button>)}</div></>:<button className="primary reveal" onClick={()=>setRevealed(true)}>Afficher la réponse</button>}</div>
+ </div>
+}
+
+function QCM({cards,qcm,setQcm}){
+ if(!qcm)return <div className="page"><div className="panel qcm"><small className="eyebrow">QCM</small><h1>Entraînement</h1><p>Transforme tes cartes en petite session de rappel.</p><button onClick={()=>{const c=cards[0];setQcm(c?{q:"Quel est l’élément clé à retenir ?",a:[c.back,"Je ne sais pas encore","Autre réponse"],right:0}:null)}}>{cards.length?"Lancer un QCM":"Créer d’abord des flashcards"}</button></div></div>;
+ const [answered,setAnswered]=React.useState(false);
+ return <div className="page"><div className="panel qcm"><small className="eyebrow">QCM</small><h1>{qcm.q}</h1><div className="list">{qcm.a.map((a,i)=><button key={i} onClick={()=>setAnswered(true)}>{a}</button>)}</div>{answered&&<p><b>Correction :</b> réponse attendue : {qcm.a[qcm.right]}</p>}<button onClick={()=>setQcm(null)}>Quitter</button></div></div>
+}
+
+function HistoryPage({h}){
+ return <div className="page"><div className="title"><div><small>PROGRESSION</small><h1>Historique</h1></div></div>
+  {h.length?<div className="list">{h.map(x=><div className="history" key={x.id}><span>{x.level==="perfect"?"🔵":x.level==="good"?"🟢":"🟡"}</span><div><b>{x.card}</b><small>{new Date(x.date).toLocaleString("fr-FR")}</small></div></div>)}</div>:<div className="panel empty"><History size={35}/><p>Ton historique apparaîtra ici.</p></div>}
+ </div>
+}
+
+
 createRoot(document.getElementById("root")).render(<App/>);
