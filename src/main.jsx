@@ -35,7 +35,7 @@ async function callRMedAI({action,text,context=""}){
  const controller=new AbortController();
  const timer=setTimeout(()=>controller.abort(),30000);
  try{
-  const res=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},signal:controller.signal,body:JSON.stringify({action,text:String(text||"").slice(0,12000),context:String(context||"").slice(0,16000)})});
+  const res=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"text/plain;charset=UTF-8"},signal:controller.signal,body:JSON.stringify({action,text:String(text||"").slice(0,12000),context:String(context||"").slice(0,16000)})});
   const data=await res.json().catch(()=>({}));
   if(!res.ok)throw new Error(data.error||"Le service IA a refusé la demande.");
   return data;
