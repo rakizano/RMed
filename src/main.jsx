@@ -24,26 +24,31 @@ const uid=()=>{
  catch{return String(Date.now())+Math.random().toString(16).slice(2)}
 };
 let pdfjsPromise=null;
+let pdfWorkerPromise=null;
 function isAppleMobile(){
  const ua=navigator.userAgent||"";
- return /iPad|iPhone|iPod/.test(ua)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+ return /iPad|iPhone|iPod/i.test(ua)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
 }
 async function getPdfjs(){
- if(!pdfjsPromise) pdfjsPromise=import("pdfjs-dist");
+ if(!pdfjsPromise)pdfjsPromise=import("pdfjs-dist");
  return pdfjsPromise;
+}
+async function getPdfWorkerSrc(){
+ if(!pdfWorkerPromise){
+  pdfWorkerPromise=import("pdfjs-dist/build/pdf.worker.min.js?url").then(m=>m.default);
+ }
+ return pdfWorkerPromise;
 }
 async function openPdfDocument(data){
  const pdfjsLib=await getPdfjs();
+ const workerSrc=await getPdfWorkerSrc();
+ pdfjsLib.GlobalWorkerOptions.workerSrc=workerSrc;
  const source=data instanceof ArrayBuffer?data.slice(0):data;
  const bytes=source instanceof Uint8Array?new Uint8Array(source):new Uint8Array(source);
  const options={data:bytes.slice(0),isEvalSupported:false,useSystemFonts:true,verbosity:0};
- if(isAppleMobile()){
-   // Safari/iPad: avoid the worker path, which is less reliable inside GitHub Pages/webviews.
-   options.disableWorker=true;
- }else{
-   const worker=await import("pdfjs-dist/build/pdf.worker.min.js?url");
-   pdfjsLib.GlobalWorkerOptions.workerSrc=worker.default;
- }
+ // Keep the worker URL configured even on iPad/iPhone. This avoids the recurring
+ // "GlobalWorkerOptions.workerSrc" failure while remaining compatible with Safari.
+ if(isAppleMobile())options.disableWorker=false;
  return await pdfjsLib.getDocument(options).promise;
 }
 
@@ -127,8 +132,12 @@ function App(){
      if(!data)throw new Error("PDF introuvable dans le stockage de cet appareil.");
      try{
        const doc=await openPdfDocument(data);
+       const pages=c.pages?.length?c.pages:Array.from({length:doc.numPages},(_,i)=>({id:uid(),n:i+1}));
+       const hydrated={...c,pages};
        pdfCache.current.set(c.id,doc);
        setPdfDoc(doc);
+       setCourse(hydrated);
+       if(!c.pages?.length)setCourses(x=>x.map(v=>v.id===c.id?hydrated:v));
        setPdfNativeUrl("");
        return;
      }catch(pdfJsError){
@@ -177,14 +186,14 @@ function App(){
        setPdfNativeUrl(url);
      }
      if(doc){
+       const pages=Array.from({length:doc.numPages},(_,i)=>({id:uid(),n:i+1}));
+       const hydrated={...c,pages};
        pdfCache.current.set(id,doc);
        setPdfDoc(doc);
-       setCourses(x=>x.map(v=>v.id===id?{...v,pages:Array.from({length:doc.numPages},(_,i)=>({id:uid(),n:i+1}))}:v));
+       setCourse(hydrated);
+       setCourses(x=>x.map(v=>v.id===id?hydrated:v));
      }
      return;
-     pdfCache.current.set(id,doc);
-     setPdfDoc(doc);
-     setCourses(x=>x.map(v=>v.id===id?{...v,pages:Array.from({length:doc.numPages},(_,i)=>({id:uid(),n:i+1}))}:v));
    }catch(err){
      console.error("PDF import error:",err);
      setPdfError(err?.message||"Impossible d’ouvrir le PDF.");
@@ -280,7 +289,7 @@ function App(){
    <header><b className="mobile">RMed</b><div className="search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher…"/></div><div className="avatar">R</div></header>
 
    {tab==="home"&&<Home cards={cards} due={due.length} courses={courses} nav={nav} open={open}/>}
-   {tab==="course"&&<Course openUpload={()=>setUploadOpen(true)} course={course} pageNumber={pageNumber} setPageNumber={setPageNumber} pdfDoc={pdfDoc} pdfNativeUrl={pdfNativeUrl} pdfLoading={pdfLoading} pdfError={pdfError} zoom={zoom} setZoom={setZoom} sel={sel} suggestions={suggestions} onSelection={onSelection} openCreator={openCreator} applySuggestion={applySuggestion} pdfLocked={pdfLocked} highlights={highlights.filter(h=>h.courseId===course.id&&h.page===pageNumber)} focusHighlightId={focusHighlightId} clearFocus={()=>setFocusHighlightId(null)} importPdf={importPdf} courses={courses} open={open}/>}
+   {tab==="course"&&<Course openUpload={()=>setUploadOpen(true)} course={course} pageNumber={pageNumber} setPageNumber={setPageNumber} pdfDoc={pdfDoc} pdfNativeUrl={pdfNativeUrl} pdfLoading={pdfLoading} pdfError={pdfError} zoom={zoom} setZoom={setZoom} sel={sel} suggestions={suggestions} onSelection={onSelection} openCreator={openCreator} applySuggestion={applySuggestion} pdfLocked={pdfLocked} setPdfLocked={setPdfLocked} highlights={highlights.filter(h=>h.courseId===course.id&&h.page===pageNumber)} focusHighlightId={focusHighlightId} clearFocus={()=>setFocusHighlightId(null)} importPdf={importPdf} courses={courses} open={open}/>}
    {tab==="cards"&&<Cards cards={cards} search={search} open={openCardSource} del={deleteCard}/>}
    {tab==="review"&&<Review rc={rc} revealed={revealed} setRevealed={setRevealed} rate={rate} total={due.length} i={ri}/>}
    {tab==="qcm"&&<QCM cards={cards} qcm={qcm} setQcm={setQcm}/>}
@@ -740,6 +749,11 @@ function ExternalPdfReader({courseId,initialPage=1}){
     const doc=await openPdfDocument(data);
     if(cancelled)return;
     setPdfDoc(doc);
+    if(!course.pages?.length){
+      const pages=Array.from({length:doc.numPages},(_,i)=>({id:course.id+"-p"+(i+1),n:i+1}));
+      const updatedCourses=courses.map(c=>c.id===course.id?{...c,pages}:c);
+      save("rmed_courses",updatedCourses);
+    }
     setPageNumber(p=>Math.min(Math.max(1,p),doc.numPages));
    }catch(err){
     if(!cancelled)setError(err?.message||"Impossible d’ouvrir le PDF.");
@@ -760,8 +774,7 @@ function ExternalPdfReader({courseId,initialPage=1}){
 
  function addExternalHighlight(selection){
   if(!selection?.text||!course)return;
-  const pg=course.pages.find(x=>x.n===pageNumber);
-  if(!pg)return;
+  const pg=course.pages.find(x=>x.n===pageNumber)||{id:course.id+"-p"+pageNumber,n:pageNumber};
   const existing=highlights.find(h=>h.courseId===course.id&&h.pageId===pg.id&&h.text===selection.text);
   if(existing){setSel({...selection,highlightId:existing.id});return}
   const h={id:uid(),courseId:course.id,pageId:pg.id,page:pageNumber,text:selection.text,rects:selection.rects||[],context:selection.context||selection.text,color:selection.color||markColor,created:Date.now()};
