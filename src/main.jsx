@@ -331,11 +331,12 @@ function DemoPage({pg,onSelection}){
  return <div className="demo-paper" ref={ref} onMouseUp={getSelection} onTouchEnd={getSelection}><small>PAGE {pg.n}</small><p>{pg.text}</p><p className="hint">Sélectionne un passage comme dans un vrai PDF pour créer une carte.</p></div>
 }
 
-function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus,onSelection,locked,markTool,markColor}){
+function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus,onSelection,locked,markTool,markColor,onPinchZoom}){
  const pageRef=useRef(null),canvasRef=useRef(null),textRef=useRef(null),contextRef=useRef("");
  const penRef=useRef({active:false,points:[],pointerId:null,scrollLeft:0,scrollTop:0,stage:null,start:null,mode:"highlight",color:"#ffe66d99",raf:null});
  const touchRef=useRef(new Map());
  const panRef=useRef({active:false,lastX:0,lastY:0});
+ const pinchRef=useRef({active:false,startDistance:0,startScale:scale});
  const[height,setHeight]=useState(800);
  const[penTrace,setPenTrace]=useState([]);
  const[tempRects,setTempRects]=useState([]);
@@ -654,9 +655,13 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,c
   if(e.touches.length===2){
    e.preventDefault();
    const a=e.touches[0],b=e.touches[1];
+   const dx=a.clientX-b.clientX,dy=a.clientY-b.clientY;
+   const distance=Math.hypot(dx,dy);
+   pinchRef.current={active:!!onPinchZoom,startDistance:distance,startScale:scale};
    panRef.current={active:true,lastX:(a.clientX+b.clientX)/2,lastY:(a.clientY+b.clientY)/2};
   }else{
    panRef.current.active=false;
+   pinchRef.current.active=false;
   }
   if(locked)e.preventDefault();
  }
@@ -666,6 +671,13 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,c
   if(e.touches.length!==2){e.preventDefault();return;}
   e.preventDefault();
   const a=e.touches[0],b=e.touches[1];
+  const dx=a.clientX-b.clientX,dy=a.clientY-b.clientY;
+  const distance=Math.hypot(dx,dy);
+  if(onPinchZoom&&pinchRef.current.active&&pinchRef.current.startDistance>1){
+   const next=Math.max(.75,Math.min(3,pinchRef.current.startScale*(distance/pinchRef.current.startDistance)));
+   onPinchZoom(next);
+   return;
+  }
   const cx=(a.clientX+b.clientX)/2,cy=(a.clientY+b.clientY)/2;
   const stage=pageRef.current?.parentElement;
   if(stage&&panRef.current.active){
@@ -675,7 +687,7 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,c
   panRef.current.lastX=cx;panRef.current.lastY=cy;
  }
 
- function touchEnd(){panRef.current.active=false;}
+ function touchEnd(){panRef.current.active=false;pinchRef.current.active=false;}
 
  function select(){
   if(penRef.current.active||touchRef.current.size)return;
@@ -778,7 +790,7 @@ function ExternalPdfReader({courseId,initialPage=1}){
   {error&&<div className="external-reader-state"><b>Impossible d’ouvrir le PDF</b><p>{error}</p></div>}
   {!loading&&!error&&pdfDoc&&<div className="external-reader-viewport">
     <div className="external-reader-page-wrap">
-      <PDFPage courseId={course.id} pdfDoc={pdfDoc} pageNumber={pageNumber} scale={zoom} highlights={highlights.filter(h=>h.courseId===course.id&&h.page===pageNumber)} focusHighlightId={null} clearFocus={()=>{}} onSelection={addExternalHighlight} locked={locked} markTool={markTool} markColor={markColor}/>
+      <PDFPage courseId={course.id} pdfDoc={pdfDoc} pageNumber={pageNumber} scale={zoom} highlights={highlights.filter(h=>h.courseId===course.id&&h.page===pageNumber)} focusHighlightId={null} clearFocus={()=>{}} onSelection={addExternalHighlight} locked={locked} markTool={markTool} markColor={markColor} onPinchZoom={onPinchZoom}/>
     </div>
   </div>}
   {sel&&<div className="external-selection">
