@@ -449,17 +449,30 @@ function SelectionBar({sel,suggestions,onCreate,onUse}){
 
 function UploadModal({onClose,onFile}){
  const inputRef=useRef(null);
- return <div className="overlay" onClick={e=>{if(e.target===e.currentTarget)onClose()}}>
+ const[busy,setBusy]=useState(false);
+ const[fileName,setFileName]=useState("");
+ function choose(){
+   if(busy)return;
+   inputRef.current?.click();
+ }
+ async function picked(e){
+   const file=e.target.files?.[0];
+   e.target.value="";
+   if(!file)return;
+   setBusy(true);setFileName(file.name);
+   try{await onFile(file)}finally{setBusy(false)}
+ }
+ return <div className="overlay" onClick={e=>{if(e.target===e.currentTarget&&!busy)onClose()}}>
   <div className="modal upload-modal">
-   <div className="mh"><div><small className="eyebrow">BIBLIOTHÈQUE</small><h2>Importer un cours</h2></div><button onClick={onClose}><X size={18}/></button></div>
+   <div className="mh"><div><small className="eyebrow">BIBLIOTHÈQUE</small><h2>Importer un cours</h2></div><button onClick={onClose} disabled={busy}><X size={18}/></button></div>
    <div className="upload-tabs"><button className="active">PDF</button><button disabled>Notes</button></div>
-   <label className="dropzone" onClick={()=>inputRef.current?.click()}>
+   <div className={"dropzone "+(busy?"busy":"")} onClick={choose} role="button" tabIndex="0" onKeyDown={e=>{if(e.key==="Enter"||e.key===" ")choose()}}>
     <Upload size={30}/>
-    <b>Choisir un PDF</b>
-    <span>Ton cours sera ajouté à RMed et lisible directement ici.</span>
-    <small>PDF uniquement</small>
-    <input ref={inputRef} type="file" accept="application/pdf,.pdf" onChange={e=>onFile(e.target.files?.[0])}/>
-   </label>
+    <b>{busy?"Ouverture du PDF…":"Choisir un PDF"}</b>
+    <span>{fileName||"Ton cours sera ajouté à RMed et lisible directement ici."}</span>
+    <small>PDF uniquement • fonctionne aussi sur Safari iPad</small>
+    <input ref={inputRef} type="file" accept="application/pdf,.pdf" onChange={picked} onInput={picked} aria-label="Choisir un PDF"/>
+   </div>
    <div className="upload-note">Le fichier reste stocké localement dans ce navigateur pour cette version.</div>
   </div>
  </div>
