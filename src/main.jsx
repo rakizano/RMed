@@ -1,6 +1,6 @@
 import React,{useEffect,useMemo,useRef,useState}from"react";
 import{createRoot}from"react-dom/client";
-import{BookOpen,Brain,ChevronLeft,ChevronRight,Clock3,FileText,History,Home as HomeIcon,ListChecks,Minus,Plus,Search,Sparkles,Target,Trash2,Upload,X,Highlighter,Lock,Unlock,Palette,PenLine,Eraser,ExternalLink,ArrowLeft}from"lucide-react";
+import{BookOpen,Brain,ChevronLeft,ChevronRight,Clock3,FileText,Folder,FolderPlus,History,Home as HomeIcon,ListChecks,Minus,Plus,Search,Sparkles,Target,Trash2,Upload,X,Highlighter,Lock,Unlock,Palette,PenLine,Eraser,ExternalLink,ArrowLeft}from"lucide-react";
 import pdfWorkerUrl from"pdfjs-dist/build/pdf.worker.min.js?url";
 import"./styles.css";
 
@@ -74,10 +74,12 @@ function Root(){
 
 function App(){
  const[courses,setCourses]=useState(()=>load("rmed_courses",[demo]));
+ const[folders,setFolders]=useState(()=>load("rmed_folders",[]));
  const[cards,setCards]=useState(()=>load("rmed_cards",[]));
  const[highlights,setHighlights]=useState(()=>load("rmed_highlights",[]));
  const[history,setHistory]=useState(()=>load("rmed_history",[]));
  const[tab,setTab]=useState("home");
+ const[activeFolderId,setActiveFolderId]=useState(null);
  const[course,setCourse]=useState(demo);
  const[pageNumber,setPageNumber]=useState(1);
  const[pdfDoc,setPdfDoc]=useState(null);
@@ -101,6 +103,7 @@ function App(){
  const pdfCache=useRef(new Map());
 
  useEffect(()=>save("rmed_courses",courses),[courses]);
+ useEffect(()=>save("rmed_folders",folders),[folders]);
  useEffect(()=>save("rmed_cards",cards),[cards]);
  useEffect(()=>save("rmed_highlights",highlights),[highlights]);
  useEffect(()=>save("rmed_history",history),[history]);
@@ -139,14 +142,25 @@ function App(){
    }finally{setPdfLoading(false)}
  }
 
+ function createFolder(name,parentId=null){
+   const clean=String(name||"").trim();
+   if(!clean)return;
+   setFolders(x=>[...x,{id:uid(),name:clean,parentId:parentId||null,created:Date.now()}]);
+ }
+
  async function open(c,pg=1,focus=null){
-   setCourse(c);setPageNumber(typeof pg==="number"?pg:1);setFocusHighlightId(focus);setSel(null);setTab("course");
+   setCourse(c);
+   setActiveFolderId(c.folderId||null);
+   setPageNumber(typeof pg==="number"?pg:1);
+   setFocusHighlightId(focus);
+   setSel(null);
+   setTab("course");
    if(c.kind==="pdf")await loadPdf(c);else setPdfDoc(null);
  }
 
  function nav(t){setTab(t);if(t==="review"){setRi(0);setRevealed(false)}}
 
- async function addPdf(file){
+ async function addPdf(file,folderId=activeFolderId){
    if(!file)return;
    if(file.type&&file.type!=="application/pdf"&&!/\.pdf$/i.test(file.name)){alert("Choisis un fichier PDF.");return}
    setPdfLoading(true);setPdfError("");
@@ -155,7 +169,7 @@ function App(){
      if(!buffer||buffer.byteLength<5)throw new Error("Fichier vide ou illisible");
      const id=uid();
      const title=file.name.replace(/\.pdf$/i,"");
-     const c={id,title,kind:"pdf",pages:[],created:Date.now()};
+     const c={id,title,kind:"pdf",pages:[],folderId:folderId||null,created:Date.now()};
      await savePdf(id,buffer);
      setCourses(x=>[...x,c]);
      setCourse(c);setPageNumber(1);setPdfDoc(null);setTab("course");setUploadOpen(false);
@@ -291,14 +305,14 @@ function App(){
    <header><b className="mobile">RMed</b><div className="search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher…"/></div><div className="avatar">R</div></header>
 
    {tab==="home"&&<Home cards={cards} due={due.length} courses={courses} nav={nav} open={open}/>}
-   {tab==="course"&&<Course openUpload={()=>setUploadOpen(true)} course={course} pageNumber={pageNumber} setPageNumber={setPageNumber} pdfDoc={pdfDoc} pdfNativeUrl={pdfNativeUrl} pdfLoading={pdfLoading} pdfError={pdfError} zoom={zoom} setZoom={setZoom} sel={sel} suggestions={suggestions} onSelection={onSelection} openCreator={openCreator} applySuggestion={applySuggestion} pdfLocked={pdfLocked} setPdfLocked={setPdfLocked} highlights={highlights.filter(h=>h.courseId===course.id&&h.page===pageNumber)} focusHighlightId={focusHighlightId} clearFocus={()=>setFocusHighlightId(null)} importPdf={importPdf} courses={courses} open={open} onEraseHighlight={eraseHighlight}/>}
+   {tab==="course"&&<Course openUpload={()=>setUploadOpen(true)} course={course} pageNumber={pageNumber} setPageNumber={setPageNumber} pdfDoc={pdfDoc} pdfNativeUrl={pdfNativeUrl} pdfLoading={pdfLoading} pdfError={pdfError} zoom={zoom} setZoom={setZoom} sel={sel} suggestions={suggestions} onSelection={onSelection} openCreator={openCreator} applySuggestion={applySuggestion} pdfLocked={pdfLocked} setPdfLocked={setPdfLocked} highlights={highlights.filter(h=>h.courseId===course.id&&h.page===pageNumber)} focusHighlightId={focusHighlightId} clearFocus={()=>setFocusHighlightId(null)} importPdf={file=>addPdf(file,activeFolderId)} courses={courses} folders={folders} activeFolderId={activeFolderId} setActiveFolderId={setActiveFolderId} onCreateFolder={createFolder} open={open} onEraseHighlight={eraseHighlight}/>}
    {tab==="cards"&&<Cards cards={cards} search={search} open={openCardSource} del={deleteCard} edit={editCard}/>}
    {tab==="review"&&<Review rc={rc} revealed={revealed} setRevealed={setRevealed} rate={rate} total={due.length} i={ri}/>}
    {tab==="qcm"&&<QCM cards={cards} qcm={qcm} setQcm={setQcm}/>}
    {tab==="history"&&<HistoryPage h={history}/>}
   </main>
 
-  {uploadOpen&&<UploadModal onClose={()=>setUploadOpen(false)} onFile={addPdf}/>}
+  {uploadOpen&&<UploadModal onClose={()=>setUploadOpen(false)} onFile={file=>addPdf(file,activeFolderId)}/>}
   {aiOpen&&<AIAssistant selection={sel} onClose={()=>setAiOpen(false)}/>}
   {modal&&<CardModal draft={draft} setDraft={setDraft} suggestions={suggestions} onUse={applySuggestion} onClose={()=>{setModal(false);setDraft(null)}} onSave={saveCard}/>}
  </div>
@@ -308,14 +322,76 @@ function Nav({icon,t,a,f}){return <button className={a?"nav active":"nav"} onCli
 function Home({cards,due,courses,nav,open}){return <div className="page"><section className="hero"><div><small>TON ESPACE DE RÉVISION</small><h1>Travaille ton cours au moment où tu le lis.</h1><p>Surligne → crée ta flashcard → garde le lien vers le passage exact → révise.</p><button className="primary" onClick={()=>nav("course")}>Ouvrir un cours <ChevronRight/></button></div><div className="bigdog">🐶</div></section><div className="stats"><Stat n={courses.length} t="Cours"/><Stat n={cards.length} t="Flashcards"/><Stat n={due} t="À réviser"/><Stat n={cards.filter(c=>c.level==="perfect"||c.level==="good").length} t="Bien acquis"/></div><div className="grid"><section className="panel"><h3>Continuer</h3>{courses.map(c=><button className="course" key={c.id} onClick={()=>open(c)}><FileText/><div><b>{c.title}</b><small>{c.pages.length} page(s){c.kind==="pdf"?" • PDF réel":""}</small></div><ChevronRight/></button>)}</section><section className="panel"><h3>Actions rapides</h3><div className="quick"><button onClick={()=>nav("review")}><Brain/>Réviser</button><button onClick={()=>nav("qcm")}><ListChecks/>Faire un QCM</button><button onClick={()=>nav("cards")}><Target/>Mes flashcards</button></div></section></div></div>}
 function Stat({n,t}){return <div className="stat"><strong>{n}</strong><span>{t}</span></div>}
 
-function Course({course,pageNumber,setPageNumber,pdfDoc,pdfNativeUrl,pdfLoading,pdfError,zoom,setZoom,sel,suggestions,onSelection,openCreator,applySuggestion,pdfLocked,setPdfLocked,highlights,focusHighlightId,clearFocus,importPdf,courses,open,openUpload,onEraseHighlight}){
+function Course({course,pageNumber,setPageNumber,pdfDoc,pdfNativeUrl,pdfLoading,pdfError,zoom,setZoom,sel,suggestions,onSelection,openCreator,applySuggestion,pdfLocked,setPdfLocked,highlights,focusHighlightId,clearFocus,importPdf,courses,folders,activeFolderId,setActiveFolderId,onCreateFolder,open,openUpload,onEraseHighlight}){
  const pg=course.pages.find(x=>x.n===pageNumber)||course.pages[0];
  const[markColor,setMarkColor]=useState("#ffe66d99");
  const[markTool,setMarkTool]=useState("highlight");
  const prev=()=>setPageNumber(Math.max(1,pageNumber-1));
  const next=()=>setPageNumber(Math.min(course.pages.length,pageNumber+1));
+ const currentFolder=folders.find(f=>f.id===activeFolderId)||null;
+ const visibleFolders=folders.filter(f=>(f.parentId||null)===(activeFolderId||null));
+ const visibleCourses=courses.filter(c=>(c.folderId||null)===(activeFolderId||null));
+ const breadcrumbs=[];
+ let cursor=currentFolder;
+ while(cursor){
+  breadcrumbs.unshift(cursor);
+  cursor=folders.find(f=>f.id===cursor.parentId)||null;
+ }
+ function createNamedFolder(){
+  const name=window.prompt(activeFolderId?"Nom du sous-dossier":"Nom du dossier");
+  if(name?.trim())onCreateFolder?.(name,activeFolderId);
+ }
+ function goRoot(){
+  setActiveFolderId?.(null);
+ }
+ function openFolder(id){
+  setActiveFolderId?.(id);
+  setPageNumber(1);
+ }
  return <div className="page"><div className="title"><div><small>LECTEUR DE COURS</small><h1>{course.title}</h1></div><button className="upload" onClick={()=>openUpload?.()}><Upload/>Importer un PDF</button></div>
- <div className="course-switcher">{courses.map(c=><button className={c.id===course.id?"selected":""} key={c.id} onClick={()=>open(c)}><FileText/>{c.title}</button>)}</div>
+
+ <section className="library-browser panel">
+  <div className="library-browser-head">
+   <div>
+    <small className="eyebrow">MA BIBLIOTHÈQUE</small>
+    <b>{currentFolder?.name||"Tous les cours"}</b>
+   </div>
+   <div className="library-browser-actions">
+    {activeFolderId&&<button onClick={goRoot} title="Retourner à la racine"><ArrowLeft size={15}/> Racine</button>}
+    <button onClick={createNamedFolder}><FolderPlus size={15}/> {activeFolderId?"Sous-dossier":"Nouveau dossier"}</button>
+    <button className="primary" onClick={()=>openUpload?.()}><Upload size={15}/> Ajouter un PDF</button>
+   </div>
+  </div>
+  <div className="library-breadcrumbs">
+   <button onClick={goRoot} className={!activeFolderId?"current":""}>Tous les cours</button>
+   {breadcrumbs.map((f,i)=><React.Fragment key={f.id}><span>/</span><button onClick={()=>setActiveFolderId?.(f.id)} className={i===breadcrumbs.length-1?"current":""}>{f.name}</button></React.Fragment>)}
+  </div>
+
+  {visibleFolders.length>0&&<div className="library-section">
+   <div className="library-section-title"><Folder size={16}/> Dossiers</div>
+   <div className="folder-grid">{visibleFolders.map(f=>{
+    const count=courses.filter(c=>(c.folderId||null)===f.id).length;
+    const childCount=folders.filter(x=>(x.parentId||null)===f.id).length;
+    return <button className="folder-card" key={f.id} onClick={()=>openFolder(f.id)}>
+      <div className="folder-icon"><Folder/></div>
+      <div><b>{f.name}</b><small>{count} cours • {childCount} sous-dossier(s)</small></div>
+      <ChevronRight size={17}/>
+    </button>
+   })}</div>
+  </div>}
+
+  <div className="library-section">
+   <div className="library-section-title"><FileText size={16}/> {visibleCourses.length?"Cours dans ce dossier":"Cours"}</div>
+   {visibleCourses.length?<div className="course-grid">{visibleCourses.map(c=>
+    <button className={"course-file "+(c.id===course.id?"selected":"")} key={c.id} onClick={()=>open(c)}>
+      <div className="course-file-icon"><FileText/></div>
+      <div className="course-file-body"><b>{c.title}</b><small>{c.pages.length} page(s){c.kind==="pdf"?" • PDF":" • Démo"}</small></div>
+      <ChevronRight size={17}/>
+    </button>
+   )}</div>:<div className="library-empty">Aucun cours ici. Ajoute un PDF ou crée un dossier.</div>}
+  </div>
+ </section>
+
  <div className="reader split-reader">
   <aside className="notes-pane">
    <div className="notes-head"><div><small>NOTES & FLASHCARDS</small><b>{course.title}</b></div><span>{highlights.length} surlignage(s)</span></div>
@@ -442,19 +518,25 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,c
   return null;
  }
 
+ function caretOffsetInSpan(span,range){
+  if(!span||!range)return 0;
+  try{
+   const endNode=range.startContainer;
+   const endOffset=range.startOffset;
+   if(endNode===span.firstChild&&endNode?.nodeType===3)return Math.max(0,Math.min(endNode.textContent?.length||0,endOffset));
+   const probe=document.createRange();
+   probe.selectNodeContents(span);
+   probe.setEnd(endNode,endOffset);
+   return probe.toString().length;
+  }catch{return 0}
+ }
+
  function getPointInfo(clientX,clientY){
   const caret=getCaretAtPoint(clientX,clientY);
   const span=getSpanAtClientPoint(clientX,clientY);
   const children=[...textRef.current?.children||[]];
   const index=span?children.indexOf(span):-1;
-  let offset=0;
-  if(caret&&span){
-   try{
-    const node=caret.startContainer;
-    if(span.contains(node))offset=caret.startOffset;
-    else if(node.nodeType===1&&span.contains(node))offset=Math.min(caret.startOffset,span.textContent?.length||0);
-   }catch{}
-  }
+  const offset=caret&&span?caretOffsetInSpan(span,caret):0;
   return {caret,span,index,offset};
  }
 
@@ -483,14 +565,18 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,c
 
   if(a.index>=0&&b.index>=0){
    const children=[...textRef.current.children];
-   const lo=Math.min(a.index,b.index);
-   const hi=Math.max(a.index,b.index);
-   const from=children[lo],to=children[hi];
+   const first=forward?a:b;
+   const last=forward?b:a;
+   const from=children[first.index],to=children[last.index];
    if(from&&to){
     try{
-     range.setStart(from.firstChild,0);
-     range.setEnd(to.firstChild,to.textContent?.length||0);
-     if(!range.collapsed)return range;
+     const fromNode=from.firstChild||from;
+     const toNode=to.firstChild||to;
+     const fromLen=from.textContent?.length||0;
+     const toLen=to.textContent?.length||0;
+     range.setStart(fromNode,Math.max(0,Math.min(first.offset,fromLen)));
+     range.setEnd(toNode,Math.max(0,Math.min(last.offset,toLen)));
+     if(!range.collapsed&&range.toString().trim())return range;
     }catch{}
    }
   }
@@ -500,17 +586,18 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,c
  function rectsFromRange(range){
   const root=pageRef.current?.getBoundingClientRect();
   if(!root||!range)return [];
+  const direct=[...range.getClientRects()]
+    .map(r=>({x:r.left-root.left,y:r.top-root.top,width:r.width,height:r.height}))
+    .filter(r=>r.width>1&&r.height>3);
+  if(direct.length)return direct;
   const words=[...textRef.current?.children||[]];
-  const rects=[];
-  for(const word of words){
-   try{
-    if(!range.intersectsNode(word))continue;
-    const r=word.getBoundingClientRect();
-    if(r.width>1&&r.height>1)rects.push({x:r.left-root.left,y:r.top-root.top,width:r.width,height:r.height});
-   }catch{}
-  }
-  if(rects.length)return rects;
-  return [...range.getClientRects()].map(r=>({x:r.left-root.left,y:r.top-root.top,width:r.width,height:r.height})).filter(r=>r.width>1&&r.height>1);
+  return words.flatMap(word=>{
+    try{
+      if(!range.intersectsNode(word))return [];
+      const r=word.getBoundingClientRect();
+      return r.width>1&&r.height>3?[{x:r.left-root.left,y:r.top-root.top,width:r.width,height:r.height}]:[];
+    }catch{return []}
+  });
  }
 
  function updateLiveHighlight(){
