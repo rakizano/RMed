@@ -55,6 +55,7 @@ function App(){
  const[revealed,setRevealed]=useState(false);
  const[ri,setRi]=useState(0);
  const[qcm,setQcm]=useState(null);
+ const[uploadOpen,setUploadOpen]=useState(false);
  const pdfCache=useRef(new Map());
 
  useEffect(()=>localStorage.setItem("rmed_courses",JSON.stringify(courses)),[courses]);
@@ -86,8 +87,8 @@ function App(){
 
  function nav(t){setTab(t);if(t==="review"){setRi(0);setRevealed(false)}}
 
- async function importPdf(e){
-   const file=e.target.files?.[0];if(!file)return;
+ async function addPdf(file){
+   if(!file||file.type!=="application/pdf"){alert("Choisis un fichier PDF.");return}
    setPdfLoading(true);
    try{
      const buffer=await file.arrayBuffer();
@@ -98,10 +99,12 @@ function App(){
      await savePdf(id,buffer);
      pdfCache.current.set(id,doc);
      setCourses(x=>[...x,c]);
-     setCourse(c);setPageNumber(1);setPdfDoc(doc);setTab("course");
+     setCourse(c);setPageNumber(1);setPdfDoc(doc);setTab("course");setUploadOpen(false);
    }catch(err){console.error(err);alert("Impossible d’ouvrir ce PDF.")}
-   finally{setPdfLoading(false);e.target.value=""}
+   finally{setPdfLoading(false)}
  }
+
+ function importPdf(e){const file=e.target.files?.[0];if(file)addPdf(file);e.target.value=""}
 
  function currentPage(){return course.pages.find(x=>x.n===pageNumber)||course.pages[0]}
 
@@ -189,14 +192,14 @@ function App(){
    <header><b className="mobile">RMed</b><div className="search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher…"/></div><div className="avatar">R</div></header>
 
    {tab==="home"&&<Home cards={cards} due={due.length} courses={courses} nav={nav} open={open}/>}
-   {tab==="course"&&<Course course={course} pageNumber={pageNumber} setPageNumber={setPageNumber} pdfDoc={pdfDoc} pdfLoading={pdfLoading} zoom={zoom} setZoom={setZoom} sel={sel} suggestions={suggestions} onSelection={onSelection} openCreator={openCreator} applySuggestion={applySuggestion} highlights={highlights.filter(h=>h.courseId===course.id&&h.page===pageNumber)} focusHighlightId={focusHighlightId} clearFocus={()=>setFocusHighlightId(null)} importPdf={importPdf} courses={courses} open={open}/>}
+   {tab==="course"&&<Course openUpload={()=>setUploadOpen(true)} course={course} pageNumber={pageNumber} setPageNumber={setPageNumber} pdfDoc={pdfDoc} pdfLoading={pdfLoading} zoom={zoom} setZoom={setZoom} sel={sel} suggestions={suggestions} onSelection={onSelection} openCreator={openCreator} applySuggestion={applySuggestion} highlights={highlights.filter(h=>h.courseId===course.id&&h.page===pageNumber)} focusHighlightId={focusHighlightId} clearFocus={()=>setFocusHighlightId(null)} importPdf={importPdf} courses={courses} open={open}/>}
    {tab==="cards"&&<Cards cards={cards} search={search} open={openCardSource} del={deleteCard}/>}
    {tab==="review"&&<Review rc={rc} revealed={revealed} setRevealed={setRevealed} rate={rate} total={due.length} i={ri}/>}
    {tab==="qcm"&&<QCM cards={cards} qcm={qcm} setQcm={setQcm}/>}
    {tab==="history"&&<HistoryPage h={history}/>}
   </main>
 
-  {modal&&<CardModal draft={draft} setDraft={setDraft} suggestions={suggestions} onUse={applySuggestion} onClose={()=>{setModal(false);setDraft(null)}} onSave={saveCard}/>}
+  {uploadOpen&&<UploadModal onClose={()=>setUploadOpen(false)} onFile={addPdf}/>}\n  {modal&&<CardModal draft={draft} setDraft={setDraft} suggestions={suggestions} onUse={applySuggestion} onClose={()=>{setModal(false);setDraft(null)}} onSave={saveCard}/>}
  </div>
 }
 
@@ -204,15 +207,15 @@ function Nav({icon,t,a,f}){return <button className={a?"nav active":"nav"} onCli
 function Home({cards,due,courses,nav,open}){return <div className="page"><section className="hero"><div><small>TON ESPACE DE RÉVISION</small><h1>Travaille ton cours au moment où tu le lis.</h1><p>Surligne → crée ta flashcard → garde le lien vers le passage exact → révise.</p><button className="primary" onClick={()=>nav("course")}>Ouvrir un cours <ChevronRight/></button></div><div className="bigdog">🐶</div></section><div className="stats"><Stat n={courses.length} t="Cours"/><Stat n={cards.length} t="Flashcards"/><Stat n={due} t="À réviser"/><Stat n={cards.filter(c=>c.level==="perfect"||c.level==="good").length} t="Bien acquis"/></div><div className="grid"><section className="panel"><h3>Continuer</h3>{courses.map(c=><button className="course" key={c.id} onClick={()=>open(c)}><FileText/><div><b>{c.title}</b><small>{c.pages.length} page(s){c.kind==="pdf"?" • PDF réel":""}</small></div><ChevronRight/></button>)}</section><section className="panel"><h3>Actions rapides</h3><div className="quick"><button onClick={()=>nav("review")}><Brain/>Réviser</button><button onClick={()=>nav("qcm")}><ListChecks/>Faire un QCM</button><button onClick={()=>nav("cards")}><Target/>Mes flashcards</button></div></section></div></div>}
 function Stat({n,t}){return <div className="stat"><strong>{n}</strong><span>{t}</span></div>}
 
-function Course({course,pageNumber,setPageNumber,pdfDoc,pdfLoading,zoom,setZoom,sel,suggestions,onSelection,openCreator,applySuggestion,highlights,focusHighlightId,clearFocus,importPdf,courses,open}){
+function Course({course,pageNumber,setPageNumber,pdfDoc,pdfLoading,zoom,setZoom,sel,suggestions,onSelection,openCreator,applySuggestion,highlights,focusHighlightId,clearFocus,importPdf,courses,open,openUpload}){
  const pg=course.pages.find(x=>x.n===pageNumber)||course.pages[0];
  const prev=()=>setPageNumber(Math.max(1,pageNumber-1));
  const next=()=>setPageNumber(Math.min(course.pages.length,pageNumber+1));
- return <div className="page"><div className="title"><div><small>LECTEUR DE COURS</small><h1>{course.title}</h1></div><label className="upload"><Upload/>Importer un PDF<input type="file" accept=".pdf" onChange={importPdf}/></label></div>
+ return <div className="page"><div className="title"><div><small>LECTEUR DE COURS</small><h1>{course.title}</h1></div><button className="upload" onClick={()=>openUpload?.()}><Upload/>Importer un PDF</button></div>
  <div className="reader">
   <aside className="courseSide"><b>Mes cours</b>{courses.map(c=><button className={c.id===course.id?"selected":""} key={c.id} onClick={()=>open(c)}><FileText/>{c.title}</button>)}</aside>
   <section className="pdf-reader">
-   <div className="pdf-toolbar"><button onClick={prev} disabled={pageNumber<=1}><ChevronLeft/></button><span>Page <b>{pageNumber}</b> / {course.pages.length}</span><button onClick={next} disabled={pageNumber>=course.pages.length}><ChevronRight/></button><span className="spacer"/><button onClick={()=>setZoom(z=>Math.max(.75,z-.1))}><Minus/></button><span>{Math.round(zoom*100)}%</span><button onClick={()=>setZoom(z=>Math.min(2.5,z+.1))}><Plus/></button></div>
+   <div className="pdf-toolbar"><button className="tool-label" title="Surligner les passages sélectionnés"><Highlighter/><span>Surligner</span></button><button onClick={prev} disabled={pageNumber<=1}><ChevronLeft/></button><span>Page <b>{pageNumber}</b> / {course.pages.length}</span><button onClick={next} disabled={pageNumber>=course.pages.length}><ChevronRight/></button><span className="spacer"/><button onClick={()=>setZoom(z=>Math.max(.75,z-.1))}><Minus/></button><span>{Math.round(zoom*100)}%</span><button onClick={()=>setZoom(z=>Math.min(2.5,z+.1))}><Plus/></button></div>
    {pdfLoading&&<div className="pdf-state">Ouverture du PDF…</div>}
    {course.kind==="pdf"&&pdfDoc?<PDFPage pdfDoc={pdfDoc} pageNumber={pageNumber} scale={zoom} highlights={highlights} focusHighlightId={focusHighlightId} clearFocus={clearFocus} onSelection={onSelection}/>:course.kind==="demo"?<DemoPage pg={pg} onSelection={onSelection}/>:<div className="pdf-state">PDF indisponible. Réimporte-le pour continuer.</div>}
    {sel&&<SelectionBar sel={sel} suggestions={suggestions} onHighlight={()=>{}} onCreate={()=>openCreator(sel)} onUse={applySuggestion}/>}
@@ -294,7 +297,7 @@ function Cards({cards,search,open,del}){
  return <div className="page"><div className="title"><h1>Flashcards</h1><span>{cards.length} cartes</span></div>{arr.length?<div className="list">{arr.map(c=><div className="cardrow" key={c.id}><span className="emoji">{c.type==="cloze"?"🧩":c.type==="concept"?"💡":"❓"}</span><div><b>{c.front}</b><p>{c.back}</p><small>Page {c.page} • {c.type==="cloze"?"Texte à trous":c.type==="concept"?"Concept":"Question / réponse"} • passage lié</small></div><button onClick={()=>open(c)}>Voir source</button><button className="danger" onClick={()=>del(c.id)}><Trash2/></button></div>)}</div>:<Empty text="Aucune flashcard pour l’instant."/>}</div>
 }
 
-function CardModal({draft,setDraft,suggestions,onUse,onClose,onSave}){
+function UploadModal({onClose,onFile}){\n const[inputRef]=useState(()=>({current:null}));\n const ref=useRef(null);\n const[drag,setDrag]=useState(false);\n function pick(files){const f=files?.[0];if(f)onFile(f)}\n return <div className="overlay"><div className="modal upload-modal"><div className="mh"><div><small className="eyebrow">AJOUTER UN DOCUMENT</small><h2>Importer un PDF</h2></div><button onClick={onClose}><X/></button></div><div className="upload-tabs"><button className="active">Télécharger des fichiers</button><button disabled>Intégrer un lien</button></div><div className={"dropzone "+(drag?"drag":"")} onDragOver={e=>{e.preventDefault();setDrag(true)}} onDragLeave={()=>setDrag(false)} onDrop={e=>{e.preventDefault();setDrag(false);pick(e.dataTransfer.files)}} onClick={()=>ref.current?.click()}><Upload size={28}/><b>Dépose ton PDF ici</b><span>ou appuie pour choisir un fichier</span><small>PDF • lecture et surlignage directement dans RMed</small><input ref={ref} type="file" accept=".pdf,application/pdf" onChange={e=>pick(e.target.files)}/></div><div className="upload-note">Après import, le PDF s’ouvre à droite et tes flashcards restent associées à la page et au passage sélectionné.</div></div></div>\n}\n\nfunction CardModal({draft,setDraft,suggestions,onUse,onClose,onSave}){
  return <div className="overlay"><div className="modal modal-large"><div className="mh"><div><small className="eyebrow">ASSISTANT DE FORMULATION</small><h2>Créer ma flashcard</h2></div><button onClick={onClose}><X/></button></div>
  <div className="source"><b>Passage source</b><p>« {draft?.source} »</p><small>La carte reste reliée au PDF et à sa page.</small></div>
  <div className="ai-title"><Sparkles size={18}/>3 formats possibles</div>
