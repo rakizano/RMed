@@ -945,7 +945,7 @@ function ExternalPdfReader({courseId,initialPage=1}){
 
  return <div className="external-reader">
   <div className="external-reader-toolbar">
-   <button onClick={()=>window.close()} title="Fermer le lecteur"><ArrowLeft size={18}/><span>RMed</span></button>
+   <button onClick={()=>{if(window.opener)window.close();else if(window.history.length>1)window.history.back()}} title="Fermer le lecteur"><ArrowLeft size={18}/><span>RMed</span></button>
    <div className="external-reader-title"><b>{course.title}</b><span>Page {pageNumber} / {pdfDoc?.numPages||course.pages.length||"…"}</span></div>
    <div className="external-reader-actions">
     <button onClick={()=>setPageNumber(p=>Math.max(1,p-1))} disabled={pageNumber<=1}><ChevronLeft/></button>
@@ -1201,7 +1201,7 @@ function QCM({courses,course,cards,qcm,setQcm}){
   setSession(nextState);setQcm(nextState);
  }
  function reset(){setSession(null);setQcm(null);setError("")}
- if(!session)return <div className="page"><div className="panel qcm qcm-setup"><small className="eyebrow">QCM IA</small><h1>30 questions, une par une.</h1><p>RMed fabrique une session à partir uniquement de tes ressources, avec 2 ou 3 propositions maximum par question.</p><div className="qcm-scope"><b>Base du QCM</b><button className={scope==="all"?"chosen":""} onClick={()=>setScope("all")}>Tous mes cours</button><button className={scope==="course"?"chosen":""} disabled={!courses.length} onClick={()=>setScope("course")}>Premier cours</button></div><button className="primary" onClick={generate} disabled={loading}>{loading?<><span className="spinner"/>Génération des 30 questions…</>:"Générer mon QCM avec RMed IA"}</button>{error&&<div className="ai-error">{error}</div>}<div className="qcm-note">1 question à la fois • progression et score conservés pendant la session.</div></div></div>;
+ if(!session)return <div className="page"><div className="panel qcm qcm-setup"><small className="eyebrow">QCM IA</small><h1>30 questions, une par une.</h1><p>RMed fabrique une session à partir uniquement de tes ressources, avec 2 ou 3 propositions maximum par question.</p><div className="qcm-scope"><b>Base du QCM</b><button className={scope==="all"?"chosen":""} onClick={()=>setScope("all")}>Tous mes cours</button><button className={scope==="course"?"chosen":""} disabled={!courses.length} onClick={()=>setScope("course")}>Cours actuel</button></div><button className="primary" onClick={generate} disabled={loading}>{loading?<><span className="spinner"/>Génération des 30 questions…</>:"Générer mon QCM avec RMed IA"}</button>{error&&<div className="ai-error">{error}</div>}<div className="qcm-note">1 question à la fois • progression et score conservés pendant la session.</div></div></div>;
  if(session.index>=30)return <div className="page"><div className="panel qcm qcm-result"><small className="eyebrow">SESSION TERMINÉE</small><h1>QCM terminé 🎉</h1><div className="qcm-score"><strong>{session.score}/30</strong><span>bonnes réponses</span></div><button className="primary" onClick={reset}>Nouvelle session</button></div></div>;
  const current=session.questions[session.index];
  const answered=session.answered;
