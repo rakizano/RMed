@@ -427,8 +427,8 @@ function App(){
 }
 
  function onSelection(selection){
-   if(!selection?.text?.trim())return;
-   setSel({...selection,courseId:course.id,page:pageNumber});
+   if(!selection?.text?.trim()){setSel(null);return}
+   setSel({...selection,courseId:course.id,page:Number(selection.page||pageNumber)});
  }
  
  async function openCreator(selection=sel){
