@@ -828,9 +828,12 @@ function ExternalPdfReader({courseId,initialPage=1}){
  </div>
 }
 
-function SelectionBar({sel,onCreate,onAskAI}){
- return <div className="selection-bar">
-  <div className="selection-main"><button className="primary" onClick={onCreate}><Sparkles size={15}/> Créer la flashcard</button><button className="ai-action" onClick={onAskAI}><Sparkles size={15}/> Expliquer</button></div>
+function SelectionBar({sel,onCreate,onHighlight,onExplain}){
+ const anchor=sel?.rects?.length?sel.rects[sel.rects.length-1]:{x:24,y:40,width:0,height:0};
+ return <div className="selection-popover" style={{left:Math.max(12,anchor.x),top:Math.max(8,anchor.y+anchor.height+8)}}>
+  <button onClick={onCreate}><Sparkles size={14}/> Cartes IA</button>
+  <button onClick={onHighlight}><Highlighter size={14}/> Surligner</button>
+  <button onClick={onExplain}><Sparkles size={14}/> Expliquer</button>
  </div>
 }
 
@@ -858,6 +861,32 @@ function UploadModal({onClose,onFile}){
     <small>PDF uniquement • Safari iPad compatible</small>
    </div>
    <div className="upload-note">Le PDF est enregistré dans le stockage local de ce navigateur.</div>
+  </div>
+ </div>
+}
+
+function ExplainSelectionModal({selection,course,getContext,onClose}){
+ const[answer,setAnswer]=useState("");
+ const[busy,setBusy]=useState(true);
+ const[error,setError]=useState("");
+ useEffect(()=>{
+  let alive=true;
+  (async()=>{
+   try{
+    const context=await getContext(selection);
+    const data=await callRMedAI({action:"explain",text:selection.text,context});
+    if(alive)setAnswer(data?.answer||"Je n’ai pas réussi à produire une explication.");
+   }catch(err){if(alive)setError(err?.message||"IA indisponible")}
+   finally{if(alive)setBusy(false)}
+  })();
+  return()=>{alive=false};
+ },[selection,getContext]);
+ return <div className="overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+  <div className="modal explain-selection-modal">
+   <div className="mh"><div><small className="eyebrow">EXPLICATION</small><h2>Comprendre</h2></div><button onClick={onClose}><X size={18}/></button></div>
+   <div className="explain-source"><small>{course?.title||"Ton cours"}</small><p>« {selection.text} »</p></div>
+   {busy?<div className="explain-loading"><Sparkles size={18}/> RMed prépare une explication claire…</div>:error?<div className="ai-error">{error}</div>:<div className="ai-answer">{answer}</div>}
+   <div className="actions"><button onClick={onClose}>Fermer</button></div>
   </div>
  </div>
 }
