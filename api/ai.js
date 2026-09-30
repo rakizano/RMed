@@ -266,7 +266,7 @@ function providerConfigs(){
       id:"gemini",
       label:"Gemini",
       key:process.env.GEMINI_API_KEY,
-      models:[process.env.RMED_GEMINI_MODEL||"gemini-3.6-flash",process.env.RMED_GEMINI_FALLBACK_MODEL||"gemini-2.5-flash-lite"].filter((m,i,a)=>m&&a.indexOf(m)===i)
+      models:[process.env.RMED_GEMINI_MODEL||"gemini-3.8-flash",process.env.RMED_GEMINI_FALLBACK_MODEL||"gemini-3.5-flash-lite"].filter((m,i,a)=>m&&a.indexOf(m)===i)
     });
   }
   if(process.env.CEREBRAS_API_KEY){
@@ -302,7 +302,7 @@ function providerConfigs(){
       label:"DeepSeek",
       key:process.env.DEEPSEEK_API_KEY,
       baseUrl:"https://api.deepseek.com",
-      model:process.env.RMED_DEEPSEEK_MODEL||"deepseek-v4-flash"
+      model:process.env.RMED_DEEPSEEK_MODEL||"deepseek-flash"
     });
   }
   const order=String(process.env.RMED_PROVIDER_ORDER||"gemini,openai,deepseek,cerebras,groq").split(",").map(x=>x.trim().toLowerCase()).filter(Boolean);
