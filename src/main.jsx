@@ -27,7 +27,7 @@ function getAIEndpoint(){
  }catch{}
  const env=import.meta.env?.VITE_RMED_AI_URL?.trim();
  if(env)return env;
- return "";
+ return "https://r-med.vercel.app/api/ai";
 }
 async function callRMedAI({action,text,context=""}){
  const endpoint=getAIEndpoint();
