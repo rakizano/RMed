@@ -396,6 +396,7 @@ export default async function handler(req,res){
           apiKey:provider.key,
           models:provider.models,
           instructions,
+          action,
           input,
           schema,
           maxOutputTokens,
