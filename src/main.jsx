@@ -24,22 +24,27 @@ const uid=()=>{
  catch{return String(Date.now())+Math.random().toString(16).slice(2)}
 };
 let pdfjsPromise=null;
+function isAppleMobile(){
+ const ua=navigator.userAgent||"";
+ return /iPad|iPhone|iPod/.test(ua)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+}
 async function getPdfjs(){
- if(!pdfjsPromise){
-   pdfjsPromise=(async()=>{
-     const lib=await import("pdfjs-dist");
-     const worker=await import("pdfjs-dist/build/pdf.worker.min.js?url");
-     lib.GlobalWorkerOptions.workerSrc=worker.default;
-     return lib;
-   })();
- }
+ if(!pdfjsPromise) pdfjsPromise=import("pdfjs-dist");
  return pdfjsPromise;
 }
 async function openPdfDocument(data){
  const pdfjsLib=await getPdfjs();
  const source=data instanceof ArrayBuffer?data.slice(0):data;
  const bytes=source instanceof Uint8Array?new Uint8Array(source):new Uint8Array(source);
- return await pdfjsLib.getDocument({data:bytes.slice(0),isEvalSupported:false,useSystemFonts:true,verbosity:0}).promise;
+ const options={data:bytes.slice(0),isEvalSupported:false,useSystemFonts:true,verbosity:0};
+ if(isAppleMobile()){
+   // Safari/iPad: avoid the worker path, which is less reliable inside GitHub Pages/webviews.
+   options.disableWorker=true;
+ }else{
+   const worker=await import("pdfjs-dist/build/pdf.worker.min.js?url");
+   pdfjsLib.GlobalWorkerOptions.workerSrc=worker.default;
+ }
+ return await pdfjsLib.getDocument(options).promise;
 }
 
 const dbPromise=(()=>{
@@ -375,35 +380,31 @@ function PDFPage({pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus
    onSelection({text,rects:rects.map(({order,...r})=>r),context:contextRef.current,autoHighlight:true});
  }
 
- function touchDown(e){
-   if(e.pointerType!=="touch"||locked)return;
-   e.preventDefault();
-   touchRef.current.set(e.pointerId,{x:e.clientX,y:e.clientY});
-   if(touchRef.current.size===2){
-     const pts=[...touchRef.current.values()];
-     panRef.current={active:true,lastX:(pts[0].x+pts[1].x)/2,lastY:(pts[0].y+pts[1].y)/2};
+ function touchStart(e){
+   if(locked)return;
+   if(e.touches.length===2){
+     e.preventDefault();
+     const a=e.touches[0],b=e.touches[1];
+     panRef.current={active:true,lastX:(a.clientX+b.clientX)/2,lastY:(a.clientY+b.clientY)/2};
+   }else{
+     panRef.current.active=false;
    }
-   e.currentTarget.setPointerCapture?.(e.pointerId);
  }
- function touchMove(e){
-   if(e.pointerType!=="touch"||locked)return;
+ function touchMoveNative(e){
+   if(locked)return;
+   if(e.touches.length!==2){e.preventDefault();return;}
    e.preventDefault();
-   const old=touchRef.current.get(e.pointerId);
-   if(!old)return;
-   old.x=e.clientX;old.y=e.clientY;
-   if(touchRef.current.size!==2)return;
-   const pts=[...touchRef.current.values()];
-   const cx=(pts[0].x+pts[1].x)/2,cy=(pts[0].y+pts[1].y)/2;
-   const stage=pageRef.current?.parentElement;if(stage){
+   const a=e.touches[0],b=e.touches[1];
+   const cx=(a.clientX+b.clientX)/2,cy=(a.clientY+b.clientY)/2;
+   const stage=pageRef.current?.parentElement;
+   if(stage){
      stage.scrollLeft-=cx-panRef.current.lastX;
      stage.scrollTop-=cy-panRef.current.lastY;
    }
    panRef.current.lastX=cx;panRef.current.lastY=cy;
  }
- function touchUp(e){
-   if(e.pointerType!=="touch")return;
-   touchRef.current.delete(e.pointerId);
-   if(touchRef.current.size<2)panRef.current.active=false;
+ function touchEnd(){
+   panRef.current.active=false;
  }
 
  function select(){
@@ -417,11 +418,11 @@ function PDFPage({pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus
    s.removeAllRanges();
  }
 
- function pointerDown(e){if(e.pointerType==="pen")penDown(e);else if(e.pointerType==="touch")touchDown(e)}
- function pointerMove(e){if(e.pointerType==="pen")penMove(e);else if(e.pointerType==="touch")touchMove(e)}
- function pointerUp(e){if(e.pointerType==="pen")penUp(e);else if(e.pointerType==="touch")touchUp(e)}
+ function pointerDown(e){if(e.pointerType==="pen")penDown(e)}
+ function pointerMove(e){if(e.pointerType==="pen")penMove(e)}
+ function pointerUp(e){if(e.pointerType==="pen")penUp(e)}
 
- return <div className={"pdf-stage "+(locked?"pdf-stage-locked":"")} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp}>
+ return <div className={"pdf-stage "+(locked?"pdf-stage-locked":"")} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp} onTouchStart={touchStart} onTouchMove={touchMoveNative} onTouchEnd={touchEnd} onTouchCancel={touchEnd}>
   <div className="pdf-page" ref={pageRef} style={{height}} onMouseUp={select}>
    <canvas ref={canvasRef}/>
    <div className="pdf-highlights">
