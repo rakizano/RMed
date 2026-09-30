@@ -85,8 +85,9 @@ function buildInstructions(action){
   if(action==="flashcard"){
     return `Tu es RMed, un excellent professeur particulier de PASS.
 À partir UNIQUEMENT du passage fourni, crée une flashcard utile.
-Le recto doit tester le rappel du concept, pas recopier le cours.
-Le verso doit être précis et mémorisable.
+Le recto doit être une question courte.
+Le verso doit être court, précis et mémorisable.
+Réponse en quelques mots ou 1 à 2 phrases maximum.
 N'invente aucune information absente du passage.`;
   }
   if(action==="flashcard_batch"){
@@ -183,7 +184,7 @@ export default async function handler(req,res){
   const schema=pickSchema(action);
   const isQcm=action==="qcm_session";
   const isBatch=action==="flashcard_batch";
-  const maxOutputTokens=isQcm?10000:isBatch?5200:action==="explain_error"?500:1400;
+  const maxOutputTokens=isQcm?10000:isBatch?5200:action==="flashcard"?420:action==="explain_error"?500:1400;
   const temperature=isQcm?0.45:0.35;
 
   try{
