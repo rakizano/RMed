@@ -906,3 +906,47 @@
   white-space:pre-wrap;
   line-height:1.6;
 }
+/* RMed organization + flashcard workflow */
+.title-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.secondary-action,.review-folder-action{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:36px;padding:0 11px;border-radius:9px;background:#fff;border:1px solid #e2e4eb;color:#596174;font-size:11px;font-weight:800}
+.secondary-action:disabled{opacity:.5}
+.ai-create-course{white-space:nowrap}
+.course-file{display:flex;align-items:stretch;background:#fff;border:1px solid #e5e7ee;border-radius:11px;overflow:hidden}
+.course-file.selected{border-color:#d8d2ff;box-shadow:0 0 0 2px #655be812}
+.course-file-main{width:100%;display:flex;align-items:center;gap:10px;padding:13px;text-align:left;background:transparent;color:inherit}
+.course-file-main:hover{background:#faf9ff}
+.course-file-body{flex:1;min-width:0}
+.course-file-body b,.course-file-body small{display:block}
+.course-file-body b{overflow-wrap:anywhere}
+.course-file-body small{color:#8a91a0;margin-top:3px}
+.review-scope-bar{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:0 0 14px;padding:10px 12px;background:#fff;border:1px solid #e5e7ee;border-radius:12px}
+.review-scope-bar b{font-size:11px;color:#747b8d;margin-right:2px}
+.review-scope-bar button{padding:8px 10px;border-radius:8px;background:#f3f4f7;color:#61697a;font-size:11px;font-weight:800}
+.review-scope-bar button.chosen{background:#efedff;color:#5f55df;box-shadow:inset 0 0 0 1px #dedaff}
+.cards-by-course{display:grid;gap:18px}
+.cards-course-group{background:#fff;border:1px solid #e5e7ee;border-radius:15px;padding:14px}
+.cards-course-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.cards-course-head small{display:block;color:#8d94a2;font-size:10px}
+.cards-course-head h3{margin:4px 0 0}
+.cards-course-head button{display:inline-flex;align-items:center;gap:6px;padding:8px 10px;border-radius:9px;background:#efedff;color:#5f55df;font-weight:800;font-size:11px}
+.library-subtitle{margin:4px 0 0;color:#858c9b;font-size:12px}
+.batch-modal{max-width:760px}
+.batch-list{display:grid;gap:9px;margin-top:12px;max-height:58vh;overflow:auto}
+.batch-list article{display:grid;grid-template-columns:30px minmax(0,1fr);gap:10px;padding:11px;background:#fafaff;border:1px solid #e6e7ee;border-radius:10px}
+.batch-list article>span{width:26px;height:26px;border-radius:8px;background:#efedff;color:#5f55df;display:grid;place-items:center;font-weight:900;font-size:11px}
+.batch-list article b{display:block;line-height:1.4}
+.batch-list article p{margin:5px 0 3px;color:#676f80;line-height:1.4}
+.batch-list article small{color:#9097a3;font-size:10px}
+.move-modal{max-width:620px}
+.move-modal select{display:block;width:100%;margin-top:6px;border:1px solid #dfe2e9;border-radius:9px;padding:10px;background:#fff}
+@media(max-width:760px){
+ .title-actions{width:100%;justify-content:flex-start}
+ .ai-create-course{width:100%;justify-content:center}
+ .secondary-action,.review-folder-action{flex:1}
+ .cards-course-head{align-items:flex-start;flex-direction:column}
+ .cards-course-head button{width:100%;justify-content:center}
+}
+@media(max-width:620px){
+ .title-actions{gap:6px}
+ .secondary-action,.review-folder-action{font-size:10px;padding:0 8px}
+}
