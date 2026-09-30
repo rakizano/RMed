@@ -986,3 +986,30 @@
   cursor:text!important;
 }
 .pdf-stage.tool-highlight.pencil-active{touch-action:auto!important}
+
+/* Simplicity-first reader and library */
+.title-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.secondary-action{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 11px;border-radius:9px;background:#fff;border:1px solid #e2e4eb;color:#596174;font-size:11px;font-weight:800}
+.course-file{display:flex;align-items:stretch;position:relative;background:#fff;border:1px solid #e5e7ee;border-radius:11px;overflow:hidden}
+.course-file:hover{border-color:#d8d2ff}
+.course-file-main{flex:1;display:flex;align-items:center;gap:10px;padding:13px;text-align:left;background:transparent;color:inherit;min-width:0}
+.course-file-main:hover{background:#faf9ff}
+.course-file-move{width:38px;flex:0 0 38px;border-left:1px solid #eceef3;background:#fff;color:#655be8;display:grid;place-items:center}
+.course-file-move:hover{background:#efedff}
+.drop-target{transition:transform .12s ease,box-shadow .12s ease,border-color .12s ease}
+.drop-target:hover{border-color:#cfc8ff;box-shadow:0 0 0 2px #655be814;transform:translateY(-1px)}
+.selection-bar{position:sticky;bottom:0;z-index:8;background:rgba(255,255,255,.96);backdrop-filter:blur(10px);padding:10px;border-top:1px solid #e4e6ed;box-shadow:0 -8px 24px #2d334215}
+.selection-main{justify-content:flex-start}
+.compact-card-modal{max-width:620px}
+.pdf-stage{touch-action:auto!important;overflow:auto!important;overscroll-behavior:auto!important;-webkit-overflow-scrolling:touch}
+.pdf-text,.pdf-word{touch-action:auto!important;-webkit-user-select:text!important;user-select:text!important}
+.pdf-page{touch-action:auto!important}
+@media(max-width:760px){
+ .title-actions{width:100%;justify-content:flex-start}
+ .secondary-action{flex:1;justify-content:center}
+ .course-file-move{width:42px;flex-basis:42px}
+}
+@media(max-width:620px){
+ .selection-main{gap:6px}
+ .selection-main .primary,.selection-main .ai-action{flex:1;justify-content:center}
+}
