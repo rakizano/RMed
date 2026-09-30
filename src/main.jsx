@@ -199,7 +199,8 @@ function App(){
    {tab==="history"&&<HistoryPage h={history}/>}
   </main>
 
-  {uploadOpen&&<UploadModal onClose={()=>setUploadOpen(false)} onFile={addPdf}/>}\n  {modal&&<CardModal draft={draft} setDraft={setDraft} suggestions={suggestions} onUse={applySuggestion} onClose={()=>{setModal(false);setDraft(null)}} onSave={saveCard}/>}
+  {uploadOpen&&<UploadModal onClose={()=>setUploadOpen(false)} onFile={addPdf}/>}
+  {modal&&<CardModal draft={draft} setDraft={setDraft} suggestions={suggestions} onUse={applySuggestion} onClose={()=>{setModal(false);setDraft(null)}} onSave={saveCard}/>}
  </div>
 }
 
@@ -301,7 +302,15 @@ function Cards({cards,search,open,del}){
  return <div className="page"><div className="title"><h1>Flashcards</h1><span>{cards.length} cartes</span></div>{arr.length?<div className="list">{arr.map(c=><div className="cardrow" key={c.id}><span className="emoji">{c.type==="cloze"?"🧩":c.type==="concept"?"💡":"❓"}</span><div><b>{c.front}</b><p>{c.back}</p><small>Page {c.page} • {c.type==="cloze"?"Texte à trous":c.type==="concept"?"Concept":"Question / réponse"} • passage lié</small></div><button onClick={()=>open(c)}>Voir source</button><button className="danger" onClick={()=>del(c.id)}><Trash2/></button></div>)}</div>:<Empty text="Aucune flashcard pour l’instant."/>}</div>
 }
 
-function UploadModal({onClose,onFile}){\n const[inputRef]=useState(()=>({current:null}));\n const ref=useRef(null);\n const[drag,setDrag]=useState(false);\n function pick(files){const f=files?.[0];if(f)onFile(f)}\n return <div className="overlay"><div className="modal upload-modal"><div className="mh"><div><small className="eyebrow">AJOUTER UN DOCUMENT</small><h2>Importer un PDF</h2></div><button onClick={onClose}><X/></button></div><div className="upload-tabs"><button className="active">Télécharger des fichiers</button><button disabled>Intégrer un lien</button></div><div className={"dropzone "+(drag?"drag":"")} onDragOver={e=>{e.preventDefault();setDrag(true)}} onDragLeave={()=>setDrag(false)} onDrop={e=>{e.preventDefault();setDrag(false);pick(e.dataTransfer.files)}} onClick={()=>ref.current?.click()}><Upload size={28}/><b>Dépose ton PDF ici</b><span>ou appuie pour choisir un fichier</span><small>PDF • lecture et surlignage directement dans RMed</small><input ref={ref} type="file" accept=".pdf,application/pdf" onChange={e=>pick(e.target.files)}/></div><div className="upload-note">Après import, le PDF s’ouvre à droite et tes flashcards restent associées à la page et au passage sélectionné.</div></div></div>\n}\n\nfunction CardModal({draft,setDraft,suggestions,onUse,onClose,onSave}){
+function UploadModal({onClose,onFile}){
+ const[inputRef]=useState(()=>({current:null}));
+ const ref=useRef(null);
+ const[drag,setDrag]=useState(false);
+ function pick(files){const f=files?.[0];if(f)onFile(f)}
+ return <div className="overlay"><div className="modal upload-modal"><div className="mh"><div><small className="eyebrow">AJOUTER UN DOCUMENT</small><h2>Importer un PDF</h2></div><button onClick={onClose}><X/></button></div><div className="upload-tabs"><button className="active">Télécharger des fichiers</button><button disabled>Intégrer un lien</button></div><div className={"dropzone "+(drag?"drag":"")} onDragOver={e=>{e.preventDefault();setDrag(true)}} onDragLeave={()=>setDrag(false)} onDrop={e=>{e.preventDefault();setDrag(false);pick(e.dataTransfer.files)}} onClick={()=>ref.current?.click()}><Upload size={28}/><b>Dépose ton PDF ici</b><span>ou appuie pour choisir un fichier</span><small>PDF • lecture et surlignage directement dans RMed</small><input ref={ref} type="file" accept=".pdf,application/pdf" onChange={e=>pick(e.target.files)}/></div><div className="upload-note">Après import, le PDF s’ouvre à droite et tes flashcards restent associées à la page et au passage sélectionné.</div></div></div>
+}
+
+function CardModal({draft,setDraft,suggestions,onUse,onClose,onSave}){
  return <div className="overlay"><div className="modal modal-large"><div className="mh"><div><small className="eyebrow">ASSISTANT DE FORMULATION</small><h2>Créer ma flashcard</h2></div><button onClick={onClose}><X/></button></div>
  <div className="source"><b>Passage source</b><p>« {draft?.source} »</p><small>La carte reste reliée au PDF et à sa page.</small></div>
  <div className="ai-title"><Sparkles size={18}/>3 formats possibles</div>
