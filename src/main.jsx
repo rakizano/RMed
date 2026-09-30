@@ -10,8 +10,19 @@ const demo={id:"demo",title:"Mitose — cours de démonstration",kind:"demo",pag
 {id:"p3",n:3,text:"Les microtubules du fuseau sont constitués de tubuline. Leur extrémité + présente une dynamique importante au cours de la mitose."}]};
 
 const levels=[["again","🔴","Pas du tout",10],["hard","🟠","Difficile",1440],["medium","🟡","Moyen",4320],["good","🟢","Bien acquis",10080],["perfect","🔵","Parfait",30240]];
-const load=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}};
-const uid=()=>crypto.randomUUID?.()||String(Date.now())+Math.random().toString(16).slice(2);
+const load=(k,d)=>{
+ try{
+   const raw=window.localStorage?.getItem(k);
+   return raw?JSON.parse(raw):d;
+ }catch{return d}
+};
+const save=(k,v)=>{
+ try{window.localStorage?.setItem(k,JSON.stringify(v))}catch{}
+};
+const uid=()=>{
+ try{return window.crypto?.randomUUID?.()||String(Date.now())+Math.random().toString(16).slice(2)}
+ catch{return String(Date.now())+Math.random().toString(16).slice(2)}
+};
 let pdfjsPromise=null;
 async function getPdfjs(){
  if(!pdfjsPromise){
@@ -82,10 +93,10 @@ function App(){
  const[uploadOpen,setUploadOpen]=useState(false);
  const pdfCache=useRef(new Map());
 
- useEffect(()=>localStorage.setItem("rmed_courses",JSON.stringify(courses)),[courses]);
- useEffect(()=>localStorage.setItem("rmed_cards",JSON.stringify(cards)),[cards]);
- useEffect(()=>localStorage.setItem("rmed_highlights",JSON.stringify(highlights)),[highlights]);
- useEffect(()=>localStorage.setItem("rmed_history",JSON.stringify(history)),[history]);
+ useEffect(()=>save("rmed_courses",courses),[courses]);
+ useEffect(()=>save("rmed_cards",cards),[cards]);
+ useEffect(()=>save("rmed_highlights",highlights),[highlights]);
+ useEffect(()=>save("rmed_history",history),[history]);
 
  const due=useMemo(()=>cards.filter(c=>!c.next||c.next<=Date.now()),[cards,history]);
  const rc=due[ri];
