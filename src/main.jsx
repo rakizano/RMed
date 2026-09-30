@@ -348,13 +348,14 @@ function App(){
 
  function nav(t){setTab(t);if(t==="review"){setReviewScope({type:"all",id:null});setRi(0);setRevealed(false)}}
  function navReview(type="all",id=null){setReviewScope({type,id});setRi(0);setRevealed(false);setTab("review")}
- function moveCurrentCourse(folderId){
-   if(!course?.id)return;
+ function moveCourseToFolder(courseId,folderId){
+   if(!courseId)return;
    const target=folderId||null;
-   setCourses(x=>x.map(c=>c.id===course.id?{...c,folderId:target}:c));
-   setActiveFolderId(target);
+   setCourses(x=>x.map(c=>c.id===courseId?{...c,folderId:target}:c));
+   if(course?.id===courseId)setActiveFolderId(target);
    setMoveCourseId(null);
  }
+ function moveCurrentCourse(folderId){moveCourseToFolder(course?.id,folderId);}
  async function addPdf(file,folderId=activeFolderId){
    if(!file)return;
    if(file.type&&file.type!=="application/pdf"&&!/\.pdf$/i.test(file.name)){alert("Choisis un fichier PDF.");return}
@@ -416,31 +417,16 @@ function App(){
  setSuggestions([]);
 }
 
- function makeSuggestions(selection){
-   const text=selection.text.trim();
-   const ctx=selection.context?.trim()||text;
-   const safeText=text.replace(/\s+/g," ").slice(0,180);
-   const clozeContext=ctx.includes(text)?ctx.replace(text,"{{"+text+"}}"):("Retrouve l’information manquante : {{"+text+"}}");
-   setSuggestions([
-     {type:"basic",icon:"❓",title:"Question → réponse",front:"Que faut-il retenir concernant « "+safeText+" » ?",back:text},
-     {type:"cloze",icon:"🧩",title:"Texte à trous",front:clozeContext,back:text},
-     {type:"concept",icon:"💡",title:"Concept → définition",front:"Qu’est-ce que « "+safeText+" » ?",back:text}
-   ]);
- }
-
  function onSelection(selection){
-   if(!selection?.text)return;
+   if(!selection?.text?.trim())return;
    const hId=selection.highlightId||addHighlight(selection);
-   const next={...selection,highlightId:hId};
-   setSel(next);
-   makeSuggestions(next);
+   setSel({...selection,highlightId:hId});
  }
-
+ 
  async function openCreator(selection=sel){
    if(!selection)return;
    const hId=selection.highlightId||addHighlight(selection);
-   const first=(suggestions[0])||{type:"basic",front:"Que faut-il retenir ?",back:selection.text};
-   setDraft({...first,highlightId:hId,source:selection.text,page:pageNumber,aiGenerating:true,aiError:""});
+   setDraft({type:"basic",front:"",back:"",highlightId:hId,source:selection.text,page:pageNumber,aiGenerating:true,aiError:""});
    setModal(true);
    try{
     const data=await callRMedAI({action:"flashcard",text:selection.text,context:selection.context||selection.text});
@@ -451,27 +437,18 @@ function App(){
     setDraft(d=>d?{...d,aiGenerating:false,aiError:err?.message||"IA indisponible"}:d);
    }
  }
-
- function applySuggestion(s){
-   setDraft({...s,highlightId:sel?.highlightId||addHighlight(sel),source:sel?.text||s.back,page:pageNumber,aiGenerating:false,aiError:""});
-   setModal(true);
- }
-
+ 
  function saveCard(){
    if(!draft?.front?.trim()||!draft?.back?.trim())return;
    if(draft.editingId){
     setCards(x=>x.map(c=>c.id===draft.editingId?{...c,front:draft.front.trim(),back:draft.back.trim(),type:draft.type||c.type||"basic"}:c));
    }else{
     const hId=draft.highlightId;
-    setCards(x=>[...x,{
-     id:uid(),courseId:course.id,pageId:currentPage().id,page:pageNumber,highlightId:hId,
-     source:draft.source||draft.back,type:draft.type||"basic",front:draft.front.trim(),back:draft.back.trim(),
-     level:null,next:Date.now(),created:Date.now()
-    }]);
+    setCards(x=>[...x,{id:uid(),courseId:course.id,pageId:currentPage().id,page:pageNumber,highlightId:hId,source:draft.source||draft.back,type:"basic",front:draft.front.trim(),back:draft.back.trim(),level:null,next:Date.now(),created:Date.now()}]);
    }
-   setModal(false);setDraft(null);setSuggestions([]);setSel(null);
+   setModal(false);setDraft(null);setSel(null);
  }
-
+ 
  function deleteCard(id){setCards(x=>x.filter(c=>c.id!==id))}
  function editCard(c){
    setDraft({editingId:c.id,type:c.type||"basic",front:c.front,back:c.back,source:c.source||"",page:c.page,highlightId:c.highlightId});
@@ -509,7 +486,7 @@ function App(){
    <header><b className="mobile">RMed</b><div className="search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher…"/></div><div className="avatar">R</div></header>
 
    {tab==="home"&&<Home cards={cards} due={due.length} courses={courses} nav={nav} open={open}/>}
-   {tab==="course"&&<Course openUpload={()=>setUploadOpen(true)} course={course} pageNumber={pageNumber} setPageNumber={setPageNumber} pdfDoc={pdfDoc} pdfNativeUrl={pdfNativeUrl} pdfLoading={pdfLoading} pdfError={pdfError} zoom={zoom} setZoom={setZoom} sel={sel} suggestions={suggestions} onSelection={onSelection} openCreator={openCreator} applySuggestion={applySuggestion} highlights={highlights.filter(h=>h.courseId===course.id&&h.page===pageNumber)} focusHighlightId={focusHighlightId} clearFocus={()=>setFocusHighlightId(null)} importPdf={file=>addPdf(file,activeFolderId)} courses={courses} folders={folders} activeFolderId={activeFolderId} setActiveFolderId={setActiveFolderId} onCreateFolder={createFolder} open={open} onAskAI={()=>setAiOpen(true)} onReviewCourse={()=>navReview("course",course.id)} onReviewFolder={()=>activeFolderId&&navReview("folder",activeFolderId)} onMoveCourse={()=>setMoveCourseId(course.id)} onMoveCourseId={id=>setMoveCourseId(id)}/>}
+   {tab==="course"&&<Course openUpload={()=>setUploadOpen(true)} course={course} pageNumber={pageNumber} setPageNumber={setPageNumber} pdfDoc={pdfDoc} pdfNativeUrl={pdfNativeUrl} pdfLoading={pdfLoading} pdfError={pdfError} zoom={zoom} setZoom={setZoom} sel={sel} onSelection={onSelection} openCreator={openCreator} highlights={highlights.filter(h=>h.courseId===course.id&&h.page===pageNumber)} focusHighlightId={focusHighlightId} clearFocus={()=>setFocusHighlightId(null)} importPdf={file=>addPdf(file,activeFolderId)} courses={courses} folders={folders} activeFolderId={activeFolderId} setActiveFolderId={setActiveFolderId} onCreateFolder={createFolder} open={open} onAskAI={()=>setAiOpen(true)} onReviewCourse={()=>navReview("course",course.id)} onReviewFolder={()=>activeFolderId&&navReview("folder",activeFolderId)} onMoveCourse={()=>setMoveCourseId(course.id)} onMoveCourseId={id=>setMoveCourseId(id)} onMoveCourseId={id=>setMoveCourseId(id)}/>}
    {tab==="cards"&&<Cards cards={cards} search={search} open={openCardSource} del={deleteCard} edit={editCard} courses={courses} folders={folders} onReviewCourse={id=>navReview("course",id)}/>}
    {tab==="review"&&<Review rc={rc} revealed={revealed} setRevealed={setRevealed} rate={rate} total={due.length} i={ri} courses={courses} folders={folders} course={course} activeFolderId={activeFolderId} scope={reviewScope} setScope={s=>{setReviewScope(s);setRi(0);setRevealed(false)}} onReviewAll={()=>navReview("all",null)}/>} 
    {tab==="qcm"&&<QCM courses={courses} course={course} cards={cards} qcm={qcm} setQcm={setQcm}/>}
@@ -537,86 +514,88 @@ function Course({course,pageNumber,setPageNumber,pdfDoc,pdfNativeUrl,pdfLoading,
  const visibleCourses=courses.filter(c=>(c.folderId||null)===(activeFolderId||null));
  const breadcrumbs=[];
  let cursor=currentFolder;
- while(cursor){
-  breadcrumbs.unshift(cursor);
-  cursor=folders.find(f=>f.id===cursor.parentId)||null;
- }
+ while(cursor){breadcrumbs.unshift(cursor);cursor=folders.find(f=>f.id===cursor.parentId)||null;}
  function createNamedFolder(){
   const name=window.prompt(activeFolderId?"Nom du sous-dossier":"Nom du dossier");
   if(name?.trim())onCreateFolder?.(name,activeFolderId);
  }
- function goRoot(){
-  setActiveFolderId?.(null);
+ function openFolder(id){setActiveFolderId?.(id);setPageNumber(1)}
+ function dragStart(e,c){try{e.dataTransfer.setData("text/rmed-course",c.id);e.dataTransfer.effectAllowed="move"}catch{}}
+ function dropFolder(e,id){
+  e.preventDefault();
+  const courseId=e.dataTransfer?.getData("text/rmed-course");
+  if(courseId)onMoveCourseId?.(courseId,id);
  }
- function openFolder(id){
-  setActiveFolderId?.(id);
-  setPageNumber(1);
- }
- return <div className="page"><div className="title"><div><small>LECTEUR DE COURS</small><h1>{course.title}</h1></div><div className="title-actions">
- <button className="secondary-action" onClick={onMoveCourse} disabled={!course?.id}><Folder size={16}/> Ranger</button>
- <button className="secondary-action" onClick={onReviewCourse} disabled={!course?.id}><Brain size={16}/> Réviser ce cours</button>
- <button className="primary ai-create-course" onClick={onCreateBatch} disabled={batchBusy||!course?.id}><Sparkles size={16}/>{batchBusy?"Création…":"Créer 8 flashcards avec ce cours"}</button>
- <button className="upload" onClick={()=>openUpload?.()}><Upload/>Importer un PDF</button>
-</div></div>
-
- <section className="library-browser panel">
-  <div className="library-browser-head">
-   <div>
-    <small className="eyebrow">MA BIBLIOTHÈQUE</small>
-    <b>{currentFolder?.name||"Tous les cours"}</b>
-   </div>
-   <div className="library-browser-actions">
-    {activeFolderId&&<button onClick={goRoot} title="Retourner à la racine"><ArrowLeft size={15}/> Racine</button>}
-    <button onClick={createNamedFolder}><FolderPlus size={15}/> {activeFolderId?"Sous-dossier":"Nouveau dossier"}</button>
-{activeFolderId&&<button className="review-folder-action" onClick={onReviewFolder}><Brain size={15}/> Réviser ce dossier</button>}
-    <button className="primary" onClick={()=>openUpload?.()}><Upload size={15}/> Ajouter un PDF</button>
+ return <div className="page">
+  <div className="title">
+   <div><small>LECTEUR DE COURS</small><h1>{course.title}</h1></div>
+   <div className="title-actions">
+    <button className="secondary-action" onClick={onReviewCourse}><Brain size={16}/> Réviser ce cours</button>
+    <button className="upload" onClick={()=>openUpload?.()}><Upload/> Ajouter un PDF</button>
    </div>
   </div>
-  <div className="library-breadcrumbs">
-   <button onClick={goRoot} className={!activeFolderId?"current":""}>Tous les cours</button>
-   {breadcrumbs.map((f,i)=><React.Fragment key={f.id}><span>/</span><button onClick={()=>setActiveFolderId?.(f.id)} className={i===breadcrumbs.length-1?"current":""}>{f.name}</button></React.Fragment>)}
-  </div>
 
-  {visibleFolders.length>0&&<div className="library-section">
-   <div className="library-section-title"><Folder size={16}/> Dossiers</div>
-   <div className="folder-grid">{visibleFolders.map(f=>{
-    const count=courses.filter(c=>(c.folderId||null)===f.id).length;
-    const childCount=folders.filter(x=>(x.parentId||null)===f.id).length;
-    return <button className="folder-card" key={f.id} onClick={()=>openFolder(f.id)}>
-      <div className="folder-icon"><Folder/></div>
-      <div><b>{f.name}</b><small>{count} cours • {childCount} sous-dossier(s)</small></div>
-      <ChevronRight size={17}/>
-    </button>
-   })}</div>
-  </div>}
-
-  <div className="library-section">
-   <div className="library-section-title"><FileText size={16}/> {visibleCourses.length?"Cours dans ce dossier":"Cours"}</div>
-   {visibleCourses.length?<div className="course-grid">{visibleCourses.map(c=>
-    <div className={"course-file "+(c.id===course.id?"selected":"")} key={c.id}>
-      <button className="course-file-main" onClick={()=>open(c)}>
+  <section className="library-browser panel">
+   <div className="library-browser-head">
+    <div><small className="eyebrow">MA BIBLIOTHÈQUE</small><b>{currentFolder?.name||"Tous les cours"}</b></div>
+    <div className="library-browser-actions">
+     {activeFolderId&&<button onClick={()=>setActiveFolderId?.(null)}><ArrowLeft size={15}/> Racine</button>}
+     <button onClick={createNamedFolder}><FolderPlus size={15}/> {activeFolderId?"Sous-dossier":"Nouveau dossier"}</button>
+     {activeFolderId&&<button className="review-folder-action" onClick={onReviewFolder}><Brain size={15}/> Réviser ce dossier</button>}
+    </div>
+   </div>
+   <div className="library-breadcrumbs">
+    <button onClick={()=>setActiveFolderId?.(null)} className={!activeFolderId?"current":""}>Tous les cours</button>
+    {breadcrumbs.map((f,i)=><React.Fragment key={f.id}><span>/</span><button onClick={()=>setActiveFolderId?.(f.id)} className={i===breadcrumbs.length-1?"current":""}>{f.name}</button></React.Fragment>)}
+   </div>
+   {visibleFolders.length>0&&<div className="library-section">
+    <div className="library-section-title"><Folder size={16}/> Dossiers</div>
+    <div className="folder-grid">{visibleFolders.map(f=>{
+      const count=courses.filter(c=>(c.folderId||null)===f.id).length;
+      const childCount=folders.filter(x=>(x.parentId||null)===f.id).length;
+      return <button className="folder-card drop-target" key={f.id} onClick={()=>openFolder(f.id)} onDragOver={e=>e.preventDefault()} onDrop={e=>dropFolder(e,f.id)}>
+       <div className="folder-icon"><Folder/></div><div><b>{f.name}</b><small>{count} cours • {childCount} sous-dossier(s)</small></div><ChevronRight size={17}/>
+      </button>
+    })}</div>
+   </div>}
+   <div className="library-section">
+    <div className="library-section-title"><FileText size={16}/> Cours</div>
+    {visibleCourses.length?<div className="course-grid">{visibleCourses.map(c=>
+      <div className={"course-file "+(c.id===course.id?"selected":"")} key={c.id} draggable onDragStart={e=>dragStart(e,c)}>
+       <button className="course-file-main" onClick={()=>open(c)}>
         <div className="course-file-icon"><FileText/></div>
         <div className="course-file-body"><b>{c.title}</b><small>{c.pages.length} page(s){c.kind==="pdf"?" • PDF":" • Démo"}</small></div>
+        <button className="course-file-move" onClick={e=>{e.stopPropagation();onMoveCourseId?.(c.id)}} title="Ranger ce cours"><Folder size={15}/></button>
         <ChevronRight size={17}/>
-      </button>
-    </div>
-   )}</div>:<div className="library-empty">Aucun cours ici. Ajoute un PDF ou crée un dossier.</div>}
-  </div>
- </section>
-
- <div className="reader split-reader">
-  <aside className="notes-pane">
-   <div className="notes-head"><div><small>NOTES & FLASHCARDS</small><b>{course.title}</b></div><span>{highlights.length} surlignage(s)</span></div>
-   <div className="notes-list">{highlights.length?highlights.map(h=><div className="note-card" key={h.id}><div className="marker"></div><p>« {h.text} »</p><button className="note-create-card" onClick={()=>openCreator({text:h.text,rects:h.rects,context:h.context,highlightId:h.id})}><Sparkles size={13}/> Créer la flashcard avec l’IA</button></div>):<div className="notes-empty"><Highlighter/><p>Surligne un élément important dans le PDF.<br/>Tes passages apparaîtront ici.</p></div>}</div>
-  </aside>
-  <section className="pdf-reader">
-   <div className="pdf-toolbar"><button className={"tool-label "+(pdfLocked?"locked":"")} onClick={()=>setPdfLocked(v=>!v)} title={pdfLocked?"Déverrouiller le déplacement du PDF":"Verrouiller le déplacement du PDF"}>{pdfLocked?<Lock/>:<Unlock/>}<span>{pdfLocked?"PDF verrouillé":"Verrouiller PDF"}</span></button><button onClick={prev} disabled={pageNumber<=1}><ChevronLeft/></button><span>Page <b>{pageNumber}</b> / {course.pages.length}</span><button onClick={next} disabled={pageNumber>=course.pages.length}><ChevronRight/></button><button className="ai-toolbar-button" onClick={onAskAI} title="Ouvrir RMed IA"><Sparkles size={16}/><span>Assistant IA</span></button><button className="external-reader-button" onClick={()=>window.open(window.location.pathname+"?reader="+encodeURIComponent(course.id)+"&page="+pageNumber,"_blank")} title="Ouvrir le PDF dans le lecteur externe"><ExternalLink size={16}/><span>Lecteur PDF</span></button><span className="spacer"/><button onClick={()=>setZoom(z=>Math.max(.75,z-.1))}><Minus/></button><span>{Math.round(zoom*100)}%</span><button onClick={()=>setZoom(z=>Math.min(2.5,z+.1))}><Plus/></button></div>
-   {pdfLoading&&<div className="pdf-state">Ouverture du PDF…</div>}
-   {pdfError&&<div className="pdf-state pdf-error"><b>Impossible d’ouvrir ce PDF</b><br/>{pdfError}<br/><button className="primary" onClick={openUpload}>Réimporter le PDF</button></div>}
-   {!pdfLoading&&!pdfError ? (course.kind==="pdf" ? (pdfNativeUrl&&isAppleMobile() ? <iframe className="native-pdf" title="PDF" src={pdfNativeUrl}/> : pdfDoc ? <PDFPage courseId={course.id} pdfDoc={pdfDoc} pageNumber={pageNumber} scale={zoom} highlights={highlights} focusHighlightId={focusHighlightId} clearFocus={clearFocus} onSelection={onSelection}/> : <div className="pdf-state">Préparation du PDF…</div>) : course.kind==="demo" ? <DemoPage pg={pg} onSelection={onSelection}/> : <div className="pdf-state">PDF indisponible. Réimporte-le pour continuer.</div>) : null}
-   {sel&&<SelectionBar sel={sel} suggestions={suggestions} onHighlight={()=>{}} onCreate={()=>openCreator(sel)} onUse={applySuggestion} onAskAI={onAskAI}/>}
+       </button>
+      </div>
+     )}</div>:<div className="library-empty">Aucun cours ici. Ajoute un PDF ou crée un dossier.</div>}
+   </div>
   </section>
- </div></div>
+
+  <div className="reader split-reader">
+   <aside className="notes-pane">
+    <div className="notes-head"><div><small>FLASHCARDS DU COURS</small><b>{course.title}</b></div><span>{highlights.length} passage(s)</span></div>
+    <div className="notes-list">{highlights.length?highlights.map(h=>
+      <div className="note-card" key={h.id}><div className="marker"></div><p>« {h.text} »</p><button className="note-create-card" onClick={()=>openCreator({text:h.text,rects:h.rects,context:h.context,highlightId:h.id})}><Sparkles size={13}/> Créer la flashcard</button></div>
+    ):<div className="notes-empty"><Highlighter/><p>Surligne pendant ta première lecture.<br/>Puis transforme chaque passage en flashcard.</p></div>}</div>
+   </aside>
+   <section className="pdf-reader">
+    <div className="pdf-toolbar">
+     <button onClick={prev} disabled={pageNumber<=1}><ChevronLeft/></button>
+     <span>Page <b>{pageNumber}</b> / {course.pages.length}</span>
+     <button onClick={next} disabled={pageNumber>=course.pages.length}><ChevronRight/></button>
+     <button className="ai-toolbar-button" onClick={onAskAI} title="Ouvrir RMed IA"><Sparkles size={16}/><span>Assistant IA</span></button>
+     <button className="external-reader-button" onClick={()=>window.open(window.location.pathname+"?reader="+encodeURIComponent(course.id)+"&page="+pageNumber,"_blank")} title="Ouvrir le PDF dans le lecteur externe"><ExternalLink size={16}/><span>Lecteur PDF</span></button>
+     <span className="spacer"/><button onClick={()=>setZoom(z=>Math.max(.75,z-.1))}><Minus/></button><span>{Math.round(zoom*100)}%</span><button onClick={()=>setZoom(z=>Math.min(2.5,z+.1))}><Plus/></button>
+    </div>
+    {pdfLoading&&<div className="pdf-state">Ouverture du PDF…</div>}
+    {pdfError&&<div className="pdf-state pdf-error"><b>Impossible d’ouvrir ce PDF</b><br/>{pdfError}<br/><button className="primary" onClick={openUpload}>Réimporter le PDF</button></div>}
+    {!pdfLoading&&!pdfError ? (course.kind==="pdf" ? (pdfNativeUrl&&isAppleMobile() ? <iframe className="native-pdf" title="PDF" src={pdfNativeUrl}/> : pdfDoc ? <PDFPage courseId={course.id} pdfDoc={pdfDoc} pageNumber={pageNumber} scale={zoom} highlights={highlights} focusHighlightId={focusHighlightId} clearFocus={clearFocus} onSelection={onSelection}/> : <div className="pdf-state">Préparation du PDF…</div>) : course.kind==="demo" ? <DemoPage pg={pg} onSelection={onSelection}/> : <div className="pdf-state">PDF indisponible. Réimporte-le pour continuer.</div>) : null}
+    {sel&&<SelectionBar sel={sel} onCreate={()=>openCreator(sel)} onAskAI={onAskAI}/>}
+   </section>
+  </div>
+ </div>
 }
 
 function DemoPage({pg,onSelection}){
@@ -630,20 +609,10 @@ function DemoPage({pg,onSelection}){
  return <div className="demo-paper" ref={ref} onMouseUp={getSelection} onTouchEnd={getSelection}><small>PAGE {pg.n}</small><p>{pg.text}</p><p className="hint">Sélectionne un passage comme dans un vrai PDF pour créer une carte.</p></div>
 }
 
-function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus,onSelection,locked,markTool,markColor,onPinchZoom,onEraseHighlight}){
+function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus,onSelection}){
  const pageRef=useRef(null),canvasRef=useRef(null),textRef=useRef(null),contextRef=useRef("");
- const penRef=useRef({active:false,points:[],pointerId:null,scrollLeft:0,scrollTop:0,stage:null,start:null,mode:"highlight",color:"#ffe66d99",raf:null});
- const touchRef=useRef(new Map());
- const panRef=useRef({active:false,lastX:0,lastY:0});
- const pinchRef=useRef({active:false,startDistance:0,startScale:scale});
+ const penRef=useRef({active:false,pointerId:null,anchor:null});
  const[height,setHeight]=useState(800);
- const[penTrace,setPenTrace]=useState([]);
- const[tempRects,setTempRects]=useState([]);
- const[drawings,setDrawings]=useState(()=>load("rmed_drawings_"+courseId+"_"+pageNumber,[]));
- const drawKey="rmed_drawings_"+courseId+"_"+pageNumber;
-
- useEffect(()=>{setDrawings(load(drawKey,[]));},[drawKey]);
- useEffect(()=>{save(drawKey,drawings);},[drawKey,drawings]);
 
  useEffect(()=>{
   let cancelled=false;
@@ -656,373 +625,80 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,c
     const canvas=canvasRef.current;if(!canvas)return;
     canvas.width=Math.floor(viewport.width*dpr);canvas.height=Math.floor(viewport.height*dpr);
     canvas.style.width=viewport.width+"px";canvas.style.height=viewport.height+"px";
-    const ctx=canvas.getContext("2d");
-    await page.render({canvasContext:ctx,viewport,transform:dpr!==1?[dpr,0,0,dpr,0,0]:null}).promise;
+    await page.render({canvasContext:canvas.getContext("2d"),viewport,transform:dpr!==1?[dpr,0,0,dpr,0,0]:null}).promise;
     if(cancelled)return;
     setHeight(viewport.height);
-    const text=await page.getTextContent();
-    if(cancelled)return;
-    contextRef.current=text.items.map(i=>i.str).join(" ");
+    const text=await page.getTextContent();if(cancelled)return;
+    contextRef.current=text.items.map(i=>i.str||"").join(" ");
     const layer=textRef.current;if(!layer)return;
-    layer.innerHTML="";
-    layer.classList.add("textLayer");
-    layer.style.setProperty("--scale-factor",viewport.scale);
-    const textDivs=[];
-    const textTask=pdfjsLib.renderTextLayer({textContentSource:text,container:layer,viewport,textDivs});
-    await textTask.promise;
+    layer.innerHTML="";layer.classList.add("textLayer");layer.style.setProperty("--scale-factor",viewport.scale);
+    const textDivs=[];await pdfjsLib.renderTextLayer({textContentSource:text,container:layer,viewport,textDivs}).promise;
     if(cancelled)return;
     layer.querySelectorAll("span").forEach(span=>span.classList.add("pdf-word"));
-    requestAnimationFrame(()=>{
-     if(focusHighlightId){
-      const el=document.getElementById("hl-"+focusHighlightId);
-      el?.scrollIntoView({behavior:"smooth",block:"center"});
-      clearFocus();
-     }
-    });
+    if(focusHighlightId){requestAnimationFrame(()=>{document.getElementById("hl-"+focusHighlightId)?.scrollIntoView({behavior:"smooth",block:"center"});clearFocus?.()})}
    }catch(err){console.error("PDF render error",err)}
   }
-  render();
-  return()=>{
-   cancelled=true;
-   const p=penRef.current;
-   if(p.raf)cancelAnimationFrame(p.raf);
-   p.active=false;
-   setPenTrace([]);
-   setTempRects([]);
-  };
+  render();return()=>{cancelled=true};
  },[pdfDoc,pageNumber,scale]);
 
- function pointInsidePdf(clientX,clientY){
-  const root=pageRef.current?.getBoundingClientRect();
-  if(!root)return null;
-  return {x:clientX-root.left,y:clientY-root.top,root};
+ function rects(range){
+  const root=pageRef.current?.getBoundingClientRect();if(!root)return [];
+  return [...range.getClientRects()].map(r=>({x:r.left-root.left,y:r.top-root.top,width:r.width,height:r.height})).filter(r=>r.width>1&&r.height>2);
  }
-
- function getSpanAtClientPoint(clientX,clientY){
-  const els=document.elementsFromPoint?.(clientX,clientY)||[];
-  const span=els.find(el=>el.classList?.contains("pdf-word"));
-  if(span)return span;
-  const range=document.caretRangeFromPoint?.(clientX,clientY);
-  const node=range?.startContainer;
-  return node?.parentElement?.closest?.(".pdf-word")||null;
- }
-
- function getCaretAtPoint(clientX,clientY){
+ function caretAt(x,y){
   try{
-   const direct=document.caretRangeFromPoint?.(clientX,clientY);
-   if(direct)return direct;
-   const pos=document.caretPositionFromPoint?.(clientX,clientY);
-   if(pos){
-    const r=document.createRange();
-    r.setStart(pos.offsetNode,pos.offset);
-    r.collapse(true);
-    return r;
-   }
+   if(document.caretRangeFromPoint){const r=document.caretRangeFromPoint(x,y);if(r)return r}
+   if(document.caretPositionFromPoint){const p=document.caretPositionFromPoint(x,y);if(p){const r=document.createRange();r.setStart(p.offsetNode,p.offset);r.collapse(true);return r}}
   }catch{}
   return null;
  }
-
- function caretOffsetInSpan(span,range){
-  if(!span||!range)return 0;
-  try{
-   const endNode=range.startContainer;
-   const endOffset=range.startOffset;
-   if(endNode===span.firstChild&&endNode?.nodeType===3)return Math.max(0,Math.min(endNode.textContent?.length||0,endOffset));
-   const probe=document.createRange();
-   probe.selectNodeContents(span);
-   probe.setEnd(endNode,endOffset);
-   return probe.toString().length;
-  }catch{return 0}
- }
-
- function getPointInfo(clientX,clientY){
-  const caret=getCaretAtPoint(clientX,clientY);
-  const span=getSpanAtClientPoint(clientX,clientY);
-  const children=[...textRef.current?.children||[]];
-  const index=span?children.indexOf(span):-1;
-  const offset=caret&&span?caretOffsetInSpan(span,caret):0;
-  return {caret,span,index,offset};
- }
-
- function buildPencilRange(start,end){
-  if(!textRef.current||!start||!end)return null;
-  const a=getPointInfo(start.clientX,start.clientY);
-  const b=getPointInfo(end.clientX,end.clientY);
-  if(!a.span&&!b.span)return null;
-
-  let forward=true;
-  if(a.index>=0&&b.index>=0){
-   if(a.index>b.index)forward=false;
-   else if(a.index===b.index&&a.offset>b.offset)forward=false;
-  }
-
-  const range=document.createRange();
-  try{
-   const first=forward?a:b;
-   const last=forward?b:a;
-   if(first.caret&&last.caret){
-    range.setStart(first.caret.startContainer,first.caret.startOffset);
-    range.setEnd(last.caret.startContainer,last.caret.startOffset);
-    if(!range.collapsed&&range.toString().trim())return range;
-   }
-  }catch{}
-
-  if(a.index>=0&&b.index>=0){
-   const children=[...textRef.current.children];
-   const first=forward?a:b;
-   const last=forward?b:a;
-   const from=children[first.index],to=children[last.index];
-   if(from&&to){
-    try{
-     const fromNode=from.firstChild||from;
-     const toNode=to.firstChild||to;
-     const toLen=to.textContent?.length||0;
-     range.setStart(fromNode,0);
-     range.setEnd(toNode,toLen);
-     if(!range.collapsed&&range.toString().trim())return range;
-    }catch{}
-   }
-  }
-  return null;
- }
-
- function rectsFromRange(range){
-  const root=pageRef.current?.getBoundingClientRect();
-  if(!root||!range)return [];
-  const direct=[...range.getClientRects()]
-    .map(r=>({x:r.left-root.left,y:r.top-root.top,width:r.width,height:r.height}))
-    .filter(r=>r.width>1&&r.height>3);
-  if(direct.length)return direct;
-  const words=[...textRef.current?.children||[]];
-  return words.flatMap(word=>{
-    try{
-      if(!range.intersectsNode(word))return [];
-      const r=word.getBoundingClientRect();
-      return r.width>1&&r.height>3?[{x:r.left-root.left,y:r.top-root.top,width:r.width,height:r.height}]:[];
-    }catch{return []}
-  });
- }
-
- function updateLiveHighlight(){
-  const p=penRef.current;
-  if(!p.start||!p.points.length)return;
-  const last=p.points[p.points.length-1];
-  const root=pageRef.current?.getBoundingClientRect();
-  if(!root)return;
-  const end={clientX:last.x+root.left,clientY:last.y+root.top};
-  const range=buildPencilRange(p.start,end);
-  if(range){
-   setTempRects(rectsFromRange(range));
-   const txt=range.toString().replace(/\s+/g," ").trim();
-   p.liveText=txt;
-   p.liveRects=rectsFromRange(range);
-  }else{
-   setTempRects([]);
-   p.liveText="";
-   p.liveRects=[];
-  }
- }
-
- function updateDrawVisual(e){
-  const p=penRef.current;
-  const local=pointInsidePdf(e.clientX,e.clientY);
-  if(!local)return;
-  p.points.push({x:local.x,y:local.y});
-  setPenTrace(p.points.slice(-180));
- }
-
- function freezeScroll(p){
-  if(!p.stage)return;
-  const lock=()=>{
-   if(!p.active)return;
-   if(p.stage.scrollLeft!==p.scrollLeft)p.stage.scrollLeft=p.scrollLeft;
-   if(p.stage.scrollTop!==p.scrollTop)p.stage.scrollTop=p.scrollTop;
-   p.raf=requestAnimationFrame(lock);
-  };
-  p.raf=requestAnimationFrame(lock);
- }
-
- function penDown(e){
-  if(markTool==="highlight")return;
-  if(e.pointerType!=="pen")return;
-  if(!pageRef.current?.contains(e.target))return;
-  e.preventDefault();
-  e.stopPropagation();
-  const local=pointInsidePdf(e.clientX,e.clientY);
-  if(!local)return;
-  const stage=pageRef.current?.parentElement;
-  const p=penRef.current;
-  if(p.active&&p.pointerId===e.pointerId)return;
-  if(p.raf)cancelAnimationFrame(p.raf);
-  penRef.current={
-   active:true,
-   points:[{x:local.x,y:local.y}],
-   pointerId:e.pointerId,
-   scrollLeft:stage?.scrollLeft||0,
-   scrollTop:stage?.scrollTop||0,
-   stage,
-   start:{clientX:e.clientX,clientY:e.clientY},
-   mode:markTool,
-   color:markColor,
-   liveText:"",
-   liveRects:[],
-   raf:null
-  };
-  if(stage){
-   stage.classList.add("pencil-active");
-   stage.scrollLeft=penRef.current.scrollLeft;
-   stage.scrollTop=penRef.current.scrollTop;
-  }
-  pageRef.current?.setPointerCapture?.(e.pointerId);
-  freezeScroll(penRef.current);
-  if(markTool==="highlight")updateLiveHighlight();
-  else if(markTool==="pen")updateDrawVisual(e);
-  else if(markTool==="eraser")eraseAt(e);
- }
-
- function penMove(e){
-  if(markTool==="highlight")return;
-  const p=penRef.current;
-  if(!p.active||e.pointerType!=="pen"||e.pointerId!==p.pointerId)return;
-  e.preventDefault();
-  e.stopPropagation();
-  if(p.stage){p.stage.scrollLeft=p.scrollLeft;p.stage.scrollTop=p.scrollTop;}
-  const local=pointInsidePdf(e.clientX,e.clientY);
-  if(local)p.points.push({x:local.x,y:local.y});
-  if(p.mode==="highlight")updateLiveHighlight();
-  else if(p.mode==="pen")setPenTrace(p.points.slice(-180));
-  else if(p.mode==="eraser")eraseAt(e);
- }
-
- function penUp(e){
-  if(markTool==="highlight")return;
-  const p=penRef.current;
-  if(!p.active||e.pointerType!=="pen"||e.pointerId!==p.pointerId)return;
-  e.preventDefault();
-  e.stopPropagation();
-  p.active=false;
-  if(p.raf)cancelAnimationFrame(p.raf);
-  if(p.stage){
-   p.stage.classList.remove("pencil-active");
-   p.stage.scrollLeft=p.scrollLeft;
-   p.stage.scrollTop=p.scrollTop;
-  }
-  try{pageRef.current?.releasePointerCapture?.(p.pointerId)}catch{}
-  if(p.mode==="pen"&&p.points.length>1){
-   setDrawings(x=>[...x,{id:uid(),points:p.points.slice(),color:p.color,width:5}]);
-  }
-  setTempRects([]);
-  setPenTrace([]);
-  if(p.mode!=="highlight")return;
-
-  const root=pageRef.current?.getBoundingClientRect();
-  if(!root||!p.start)return;
-  const end={clientX:e.clientX,clientY:e.clientY};
-  const range=buildPencilRange(p.start,end);
-  const text=(range?.toString()||p.liveText||"").replace(/\s+/g," ").trim();
-  const rects=range?rectsFromRange(range):(p.liveRects||[]);
-  if(!text)return;
-  onSelection({text,rects,context:contextRef.current,autoHighlight:true,color:p.color});
- }
-
- useEffect(()=>{
-  const down=e=>penDown(e);
-  const move=e=>penMove(e);
-  const up=e=>penUp(e);
-  document.addEventListener("pointerdown",down,true);
-  document.addEventListener("pointermove",move,true);
-  document.addEventListener("pointerup",up,true);
-  document.addEventListener("pointercancel",up,true);
-  return()=>{
-   document.removeEventListener("pointerdown",down,true);
-   document.removeEventListener("pointermove",move,true);
-   document.removeEventListener("pointerup",up,true);
-   document.removeEventListener("pointercancel",up,true);
-  };
- });
-
- function pointDistanceToSegment(px,py,ax,ay,bx,by){
-  const dx=bx-ax,dy=by-ay;
-  if(dx===0&&dy===0)return Math.hypot(px-ax,py-ay);
-  const t=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/(dx*dx+dy*dy)));
-  return Math.hypot(px-(ax+t*dx),py-(ay+t*dy));
- }
-
- function eraseAt(e){
-  const root=pageRef.current?.getBoundingClientRect();if(!root)return;
-  const x=e.clientX-root.left,y=e.clientY-root.top;
-  setDrawings(prev=>prev.filter(d=>{
-   for(let i=1;i<d.points.length;i++){
-    const a=d.points[i-1],b=d.points[i];
-    if(pointDistanceToSegment(x,y,a.x,a.y,b.x,b.y)<22)return false;
-   }
-   return true;
-  }));
-  const hit=highlights.find(h=>(h.rects||[]).some(r=>x>=r.x-18&&x<=r.x+r.width+18&&y>=r.y-18&&y<=r.y+r.height+18));
-  if(hit)onEraseHighlight?.(hit.id);
- }
-
- function touchStart(e){
-  if(e.touches.length===2){
-   e.preventDefault();
-   const a=e.touches[0],b=e.touches[1];
-   const dx=a.clientX-b.clientX,dy=a.clientY-b.clientY;
-   const distance=Math.hypot(dx,dy);
-   pinchRef.current={active:!!onPinchZoom,startDistance:distance,startScale:scale};
-   panRef.current={active:true,lastX:(a.clientX+b.clientX)/2,lastY:(a.clientY+b.clientY)/2};
-  }else{
-   panRef.current.active=false;
-   pinchRef.current.active=false;
-  }
- }
-
- function touchMoveNative(e){
-  if(e.touches.length!==2)return;
-  e.preventDefault();
-  const a=e.touches[0],b=e.touches[1];
-  const dx=a.clientX-b.clientX,dy=a.clientY-b.clientY;
-  const distance=Math.hypot(dx,dy);
-  if(onPinchZoom&&pinchRef.current.active&&pinchRef.current.startDistance>1){
-   const next=Math.max(.75,Math.min(3,pinchRef.current.startScale*(distance/pinchRef.current.startDistance)));
-   onPinchZoom(next);
-   return;
-  }
-  const cx=(a.clientX+b.clientX)/2,cy=(a.clientY+b.clientY)/2;
-  const stage=pageRef.current?.parentElement;
-  if(stage&&panRef.current.active){
-   stage.scrollLeft-=cx-panRef.current.lastX;
-   stage.scrollTop-=cy-panRef.current.lastY;
-  }
-  panRef.current.lastX=cx;panRef.current.lastY=cy;
- }
-
- function touchEnd(){
-  const wasGesture=panRef.current.active;
-  panRef.current.active=false;
-  pinchRef.current.active=false;
-  if(!wasGesture&&!penRef.current.active)window.setTimeout(select,60);
- }
-
- function select(){
-  if(penRef.current.active||touchRef.current.size)return;
+ function finishSelection(){
+  if(penRef.current.active)return;
   const s=window.getSelection();if(!s||s.isCollapsed||!textRef.current)return;
   if(!textRef.current.contains(s.anchorNode))return;
-  const t=s.toString().trim();if(!t)return;
-  const root=pageRef.current.getBoundingClientRect();
-  const rects=Array.from(s.getRangeAt(0).getClientRects()).map(r=>({x:r.left-root.left,y:r.top-root.top,width:r.width,height:r.height})).filter(r=>r.width>1&&r.height>1);
-  onSelection({text:t,rects,context:contextRef.current});
+  const text=s.toString().replace(/\s+/g," ").trim();if(!text)return;
+  onSelection({text,rects:rects(s.getRangeAt(0)),context:contextRef.current});
   s.removeAllRanges();
  }
-
- return <div className={"pdf-stage tool-"+markTool+" "+(locked?"pdf-stage-locked":"")} onTouchStart={touchStart} onTouchMove={touchMoveNative} onTouchEnd={touchEnd} onTouchCancel={touchEnd}>
-  <div className="pdf-page" ref={pageRef} style={{height}} onMouseUp={select} onPointerUp={e=>{if(e.pointerType==="pen"&&markTool==="highlight")window.setTimeout(select,80)}}>
+ function penDown(e){
+  if(e.pointerType!=="pen"||!textRef.current?.contains(e.target))return;
+  const caret=caretAt(e.clientX,e.clientY);if(!caret)return;
+  e.preventDefault();e.stopPropagation();
+  penRef.current={active:true,pointerId:e.pointerId,anchor:{node:caret.startContainer,offset:caret.startOffset}};
+  try{pageRef.current.setPointerCapture(e.pointerId)}catch{}
+ }
+ function penMove(e){
+  const p=penRef.current;if(!p.active||p.pointerId!==e.pointerId)return;
+  e.preventDefault();e.stopPropagation();
+  const caret=caretAt(e.clientX,e.clientY);if(!caret)return;
+  const s=window.getSelection();if(!s)return;
+  try{s.removeAllRanges();s.setBaseAndExtent(p.anchor.node,p.anchor.offset,caret.startContainer,caret.startOffset)}catch{}
+ }
+ function penUp(e){
+  const p=penRef.current;if(!p.active||p.pointerId!==e.pointerId)return;
+  e.preventDefault();e.stopPropagation();p.active=false;
+  try{pageRef.current.releasePointerCapture(e.pointerId)}catch{}
+  const s=window.getSelection();if(!s||s.isCollapsed)return;
+  const text=s.toString().replace(/\s+/g," ").trim();if(!text)return;
+  onSelection({text,rects:rects(s.getRangeAt(0)),context:contextRef.current});
+  s.removeAllRanges();
+ }
+ useEffect(()=>{
+  document.addEventListener("pointerdown",penDown,true);
+  document.addEventListener("pointermove",penMove,true);
+  document.addEventListener("pointerup",penUp,true);
+  document.addEventListener("pointercancel",penUp,true);
+  return()=>{
+   document.removeEventListener("pointerdown",penDown,true);
+   document.removeEventListener("pointermove",penMove,true);
+   document.removeEventListener("pointerup",penUp,true);
+   document.removeEventListener("pointercancel",penUp,true);
+  };
+ });
+ return <div className="pdf-stage">
+  <div className="pdf-page" ref={pageRef} style={{height}} onMouseUp={finishSelection} onTouchEnd={()=>window.setTimeout(finishSelection,80)}>
    <canvas ref={canvasRef}/>
-   <div className="pdf-highlights">
-    {drawings.length>0&&<svg className="drawings-layer" viewBox={"0 0 "+Math.max(1,pageRef.current?.clientWidth||1)+" "+Math.max(1,pageRef.current?.clientHeight||1)} preserveAspectRatio="none">{drawings.map(d=><polyline key={d.id} points={d.points.map(p=>p.x+","+p.y).join(" ")} fill="none" stroke={d.color} strokeWidth={d.width||5} strokeLinecap="round" strokeLinejoin="round"/>)}</svg>}
-    {penTrace.length>1&&<svg className="pen-trace" viewBox={"0 0 "+Math.max(1,pageRef.current?.clientWidth||1)+" "+Math.max(1,pageRef.current?.clientHeight||1)} preserveAspectRatio="none"><polyline points={penTrace.map(p=>p.x+","+p.y).join(" ")} fill="none" stroke={markColor} strokeWidth={markTool==="pen"?5:14} strokeLinecap="round" strokeLinejoin="round"/></svg>}
-    {tempRects.length>0&&<div className="highlight-group live-highlight">{tempRects.map((r,i)=><span key={"t"+i} style={{left:r.x,top:r.y,width:r.width,height:r.height,background:markColor}}/> )}</div>}
-    {highlights.map(h=><div key={h.id} id={"hl-"+h.id} className="highlight-group" onClick={()=>onSelection({text:h.text,rects:h.rects,context:h.context,highlightId:h.id})}>{h.rects.map((r,i)=><span key={i} style={{left:r.x,top:r.y,width:r.width,height:r.height,background:h.color||"#ffe66d99"}}/> )}</div>)}
-   </div>
+   <div className="pdf-highlights">{highlights.map(h=><div key={h.id} id={"hl-"+h.id} className="highlight-group">{(h.rects||[]).map((r,i)=><span key={i} style={{left:r.x,top:r.y,width:r.width,height:r.height,background:h.color||"#ffe66d99"}}/> )}</div>)}</div>
    <div className="pdf-text" ref={textRef}/>
   </div>
  </div>
@@ -1123,139 +799,9 @@ function ExternalPdfReader({courseId,initialPage=1}){
  </div>
 }
 
-function AnnotationPalette({color,tool,setColor,setTool}){
- const colors=[
-  ["#ffe66d99","#FFD84D"],
-  ["#ff9fb799","#FF6B9A"],
-  ["#8fd8ff99","#39B8FF"],
-  ["#9ee7b099","#42C878"],
-  ["#ffc28a99","#FF9A3D"],
-  ["#c7b5ff99","#8B6CFF"]
- ];
- const[open,setOpen]=useState(false);
- return <div className="annotation-tools">
-  <button className={"annotation-tool "+(tool==="highlight"?"active":"")} title="Surligneur" onClick={()=>setTool("highlight")}><Highlighter size={16}/></button>
-  <button className={"annotation-tool "+(tool==="pen"?"active":"")} title="Stylo / dessin" onClick={()=>setTool("pen")}><PenLine size={16}/></button>
-  <button className={"annotation-tool "+(tool==="eraser"?"active":"")} title="Gomme" onClick={()=>setTool("eraser")}><Eraser size={16}/></button>
-  <button className="annotation-palette-button" title="Palette de couleurs" onClick={()=>setOpen(v=>!v)}><span style={{background:color}}/><Palette size={15}/></button>
-  {open&&<div className="annotation-palette">{colors.map(([rgba,solid])=><button key={rgba} className={color===rgba?"chosen":""} title="Choisir cette couleur de surlignage" onClick={()=>{setColor(rgba);setTool("highlight");setOpen(false)}}><span style={{background:solid}}/></button>)}</div>}
- </div>
-}
-
-
-function AIChat({courses,course,selection}){
- const[messages,setMessages]=useState(()=>load("rmed_ai_chat",[{
-  role:"assistant",
-  content:"Salut 👋 Je suis RMed. Je peux t’expliquer tes cours, retrouver une information dans tes ressources, créer des flashcards ou t’aider à préparer un QCM.",
-  time:Date.now()
- }]));
- const[input,setInput]=useState("");
- const[scope,setScope]=useState("all");
- const[busy,setBusy]=useState(false);
- const[error,setError]=useState("");
- const endRef=useRef(null);
- useEffect(()=>{save("rmed_ai_chat",messages.slice(-40));},[messages]);
- useEffect(()=>{endRef.current?.scrollIntoView({behavior:"smooth"});},[messages,busy]);
- async function send(prefill=""){
-  const q=(prefill||input).trim();
-  if(!q||busy)return;
-  setInput("");
-  setError("");
-  const user={role:"user",content:q,time:Date.now()};
-  setMessages(x=>[...x,user]);
-  setBusy(true);
-  try{
-   const context=await retrieveResourceContext(courses,{courseId:scope==="course"?course?.id:null,query:q,limit:18000,maxChunks:16});
-   const conversation=messages.slice(-8).map(m=>(m.role==="user"?"Étudiant":"RMed")+": "+m.content).join("\n");
-   const selectedText=selection?.text?"\n\nPASSAGE SÉLECTIONNÉ:\n"+selection.text:"";
-   const data=await callRMedAI({
-    action:"chat",
-    text:q,
-    context:"RESSOURCES DISPONIBLES:\n"+context+selectedText+"\n\nHISTORIQUE RÉCENT:\n"+conversation
-   });
-   setMessages(x=>[...x,{role:"assistant",content:data?.answer||"Je n’ai pas réussi à formuler une réponse.",time:Date.now()}]);
-  }catch(err){
-   const msg=err?.message||"Impossible de contacter RMed IA.";
-   setError(msg);
-   setMessages(x=>[...x,{role:"assistant",content:"Je n’ai pas pu répondre pour le moment. Vérifie la connexion IA puis réessaie.",time:Date.now(),error:true}]);
-  }finally{setBusy(false)}
- }
- function clearChat(){
-  setMessages([{role:"assistant",content:"Nouvelle conversation. Je suis prêt à travailler à partir de tes cours.",time:Date.now()}]);
-  setError("");
- }
- return <div className="page ai-page">
-  <div className="ai-chat-shell">
-   <div className="ai-chat-header">
-    <div className="ai-avatar">✨</div>
-    <div><small className="eyebrow">RMed IA</small><h1>Ton assistant de cours</h1><p>Je réponds à partir de tes ressources déjà envoyées.</p></div>
-    <div className="ai-chat-header-actions">
-      <label><span>Ressources</span><select value={scope} onChange={e=>setScope(e.target.value)}><option value="all">Tous mes cours</option><option value="course" disabled={!course?.id}>Ce cours</option></select></label>
-      <button onClick={clearChat}>Nouveau chat</button>
-    </div>
-   </div>
-   <div className="ai-quick-actions">
-    <button onClick={()=>send("Explique-moi simplement le cours que je révise en ce moment, puis donne-moi les 5 points à retenir.")}>📚 Expliquer le cours</button>
-    <button onClick={()=>send("Trouve dans mes ressources la définition la plus importante à connaître et indique la page.")}>🔎 Retrouver une définition</button>
-    <button onClick={()=>send("Donne-moi 3 pièges de QCM basés uniquement sur mes cours.")}>🎯 Pièges de QCM</button>
-    <button onClick={()=>send("Crée-moi une flashcard recto-verso sur le point le plus important du cours.")}>🧠 Créer une flashcard</button>
-   </div>
-   <div className="ai-chat-messages">
-    {messages.map((m,i)=><div key={i} className={"ai-bubble-wrap "+(m.role==="user"?"user":"assistant")}><div className={"ai-bubble "+(m.role==="user"?"user":"assistant")}>{m.content}</div></div>)}
-    {busy&&<div className="ai-bubble-wrap assistant"><div className="ai-bubble assistant typing">RMed réfléchit…</div></div>}
-    <div ref={endRef}/>
-   </div>
-   {error&&<div className="ai-chat-error">{error}</div>}
-   <form className="ai-chat-compose" onSubmit={e=>{e.preventDefault();send()}}>
-    <textarea rows="2" value={input} onChange={e=>setInput(e.target.value)} placeholder="Pose ta question à RMed…" onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}}}/>
-    <button className="primary" disabled={busy||!input.trim()}><Sparkles size={16}/>{busy?"Réponse…":"Envoyer"}</button>
-   </form>
-  </div>
- </div>
-}
-
-function AIAssistant({selection,courses,course,onClose}){
- const[q,setQ]=useState("");
- const[answer,setAnswer]=useState("");
- const[busy,setBusy]=useState(false);
- const[error,setError]=useState("");
- async function ask(){
-  const question=q.trim()||"Explique-moi ce passage simplement, au niveau PASS, puis donne-moi les points à retenir.";
-  setBusy(true);setAnswer("");setError("");
-  try{
-   const resource=await retrieveResourceContext(courses,{courseId:course?.id||null,query:(selection?.text||"")+" "+question,limit:10000,maxChunks:10});
-   const data=await callRMedAI({action:"explain",text:selection?.text||question,context:"RESSOURCES PERTINENTES :\n"+resource+"\n\nPASSAGE SÉLECTIONNÉ :\n"+(selection?.text||"")+"\n\nDEMANDE : "+question});
-   setAnswer(data?.answer||"Réponse vide.");
-  }catch(err){setError(err?.message||"Impossible de contacter l’IA.")}finally{setBusy(false)}
- }
- return <div className="overlay" onClick={e=>{if(e.target===e.currentTarget)onClose()}}>
-  <div className="modal ai-modal">
-   <div className="mh"><div><small className="eyebrow">RMed IA</small><h2>Assistant du cours</h2></div><button onClick={onClose}><X size={18}/></button></div>
-   <div className="ai-source"><small>PASSAGE SÉLECTIONNÉ</small><p>{selection?.text||"Aucun passage sélectionné."}</p></div>
-   <div className="ai-mode-hint"><b>Mode compréhension</b><span>Je vais d’abord simplifier, puis revenir aux termes PASS.</span></div>
-   <textarea rows="3" value={q} onChange={e=>setQ(e.target.value)} placeholder="Explique, vulgarise, donne-moi un piège de QCM…"/>
-   <div className="ai-prompt-row">
-    <button onClick={()=>setQ("Je ne comprends rien. Repars de zéro avec des mots très simples, une analogie si utile, puis reviens au vocabulaire PASS.")}>🧠 Je bloque</button>
-    <button onClick={()=>setQ("Explique-moi autrement, avec d’autres mots que le cours, puis donne-moi l’idée à retenir.")}>🔄 Autrement</button>
-   </div>
-   <button className="primary" onClick={ask} disabled={busy}>{busy?"RMed réfléchit…":"Comprendre avec RMed"}</button>
-   {error&&<div className="ai-error">{error}</div>}
-   {answer&&<div className="ai-answer">{answer}</div>}
-  </div>
- </div>
-}
-
-function SelectionBar({sel,suggestions,onCreate,onUse,onAskAI}){
+function SelectionBar({sel,onCreate,onAskAI}){
  return <div className="selection-bar">
-  <div className="selection-main">
-   <span>« {sel.text} »</span>
-   <button className="highlight-action done"><Highlighter size={15}/> Surligné</button>
-   <button className="primary" onClick={onCreate}><Sparkles size={15}/> Créer la carte avec l’IA</button>
-   <button className="ai-action" onClick={onAskAI}><Sparkles size={15}/> Assistant IA</button>
-  </div>
-  {suggestions?.length>0&&<><div className="suggestions-title"><Sparkles size={13}/> Formats proposés par RMed</div>
-   <div className="suggestions-inline">{suggestions.map((s,i)=><button key={i} className="suggestion-mini" onClick={()=>onUse(s)}>{s.icon} {s.title}</button>)}</div>
-  </>}
+  <div className="selection-main"><button className="primary" onClick={onCreate}><Sparkles size={15}/> Créer la flashcard</button><button className="ai-action" onClick={onAskAI}><Sparkles size={15}/> Expliquer</button></div>
  </div>
 }
 
@@ -1287,29 +833,27 @@ function UploadModal({onClose,onFile}){
  </div>
 }
 
-function CardModal({draft,setDraft,suggestions,onUse,onClose,onSave}){
- const[localAI,setLocalAI]=useState(false);
+function CardModal({draft,setDraft,onClose,onSave}){
+ const[busy,setBusy]=useState(false);
  async function regenerate(){
-  if(!draft?.source)return;
-  setLocalAI(true);setDraft(x=>x?{...x,aiGenerating:true,aiError:""}:x);
+  if(!draft?.source||busy)return;
+  setBusy(true);setDraft(x=>x?{...x,aiGenerating:true,aiError:""}:x);
   try{
    const data=await callRMedAI({action:"flashcard",text:draft.source,context:draft.source});
    if(data?.front&&data?.back)setDraft(x=>x?{...x,type:data.type||"basic",front:data.front,back:data.back,aiGenerating:false,aiError:""}:x);
    else throw new Error("Réponse IA incomplète.");
   }catch(err){setDraft(x=>x?{...x,aiGenerating:false,aiError:err?.message||"IA indisponible"}:x)}
-  finally{setLocalAI(false)}
+  finally{setBusy(false)}
  }
  return <div className="overlay" onClick={e=>{if(e.target===e.currentTarget)onClose()}}>
-  <div className="modal">
-   <div className="mh"><div><small className="eyebrow">FLASHCARD</small><h2>{draft?.editingId?"Modifier ta carte":"Créer ta carte"}</h2></div><button onClick={onClose}><X size={18}/></button></div>
-   {suggestions?.length>0&&!draft?.editingId&&<div className="suggestion-grid">{suggestions.map((s,i)=><button key={i} className={"suggestion-card "+(draft?.type===s.type?"chosen":"")} onClick={()=>onUse(s)}><span className="suggestion-icon">{s.icon}</span><b>{s.title}</b><small><strong>Recto :</strong> {s.front}</small><small><strong>Verso :</strong> {s.back}</small><em>Utiliser ce format</em></button>)}</div>}
-   {!draft?.editingId&&<div className="ai-generate-row"><div><b>✨ RMed IA</b><small>{draft?.aiGenerating?"Génération du recto et du verso…":"L’IA transforme le passage en vraie question/réponse."}</small></div><button className="ai-action" onClick={regenerate} disabled={draft?.aiGenerating||localAI}>{draft?.aiGenerating||localAI?"Génération…":"Régénérer avec l’IA"}</button></div>}
+  <div className="modal compact-card-modal">
+   <div className="mh"><div><small className="eyebrow">FLASHCARD</small><h2>{draft?.editingId?"Modifier la carte":"Créer la flashcard"}</h2></div><button onClick={onClose}><X size={18}/></button></div>
+   <div className="source"><small>Source • page {draft?.page||"—"}</small><p>{draft?.source}</p></div>
+   {!draft?.editingId&&<div className="ai-generate-row"><div><b>✨ RMed IA</b><small>{draft?.aiGenerating?"Création rapide de la question et de la réponse.":"Tu peux modifier les deux côtés."}</small></div><button className="ai-action" onClick={regenerate} disabled={draft?.aiGenerating||busy}>{draft?.aiGenerating||busy?"Création…":"Régénérer"}</button></div>}
    {draft?.aiError&&<div className="ai-error">{draft.aiError}</div>}
-   <label>Recto<textarea rows="3" value={draft?.front||""} onChange={e=>setDraft(x=>({...x,front:e.target.value,aiError:""}))} placeholder="La question à laquelle tu dois répondre."/></label>
-   <label>Verso<textarea rows="4" value={draft?.back||""} onChange={e=>setDraft(x=>({...x,back:e.target.value,aiError:""}))} placeholder="La réponse précise à mémoriser."/></label>
-   <div className="source"><small>Source • page {draft?.page||"—"}</small><p>{draft?.source||"Passage sélectionné"}</p></div>
-   <div className="ai"><Sparkles size={16}/><span>Le recto et le verso restent entièrement modifiables avant l’enregistrement.</span></div>
-   <div className="actions"><button onClick={onClose}>Annuler</button><button className="primary" onClick={onSave} disabled={!draft?.front?.trim()||!draft?.back?.trim()}>Enregistrer la flashcard</button></div>
+   <label>Recto<textarea rows="3" value={draft?.front||""} onChange={e=>setDraft(x=>({...x,front:e.target.value,aiError:""}))} placeholder="Question"/></label>
+   <label>Verso<textarea rows="4" value={draft?.back||""} onChange={e=>setDraft(x=>({...x,back:e.target.value,aiError:""}))} placeholder="Réponse"/></label>
+   <div className="actions"><button onClick={onClose}>Annuler</button><button className="primary" onClick={onSave} disabled={!draft?.front?.trim()||!draft?.back?.trim()}>Enregistrer</button></div>
   </div>
  </div>
 }
@@ -1434,15 +978,6 @@ function QCMCorrection({current,selected,right,next,final,courses,courseId}){
  </div>
 }
 
-function FlashcardBatchModal({data,onClose,onOpenCards}){
- return <div className="overlay" onClick={e=>{if(e.target===e.currentTarget)onClose()}}>
-  <div className="modal batch-modal">
-   <div className="mh"><div><small className="eyebrow">FLASHCARDS CRÉÉES</small><h2>{data.cards.length} nouvelles cartes</h2><p className="library-subtitle">{data.course.title}</p></div><button onClick={onClose}><X size={18}/></button></div>
-   <div className="batch-list">{data.cards.map((c,i)=><article key={c.id}><span>{i+1}</span><div><b>{c.front}</b><p>{c.back}</p><small>Page {c.page}</small></div></article>)}</div>
-   <div className="actions"><button onClick={onClose}>Fermer</button><button className="primary" onClick={onOpenCards}>Voir mes flashcards</button></div>
-  </div>
- </div>
-}
 function MoveCourseModal({course,folders,onMove,onClose}){
  const[folderId,setFolderId]=useState(course?.folderId||"");
  const options=[{id:"",label:"Racine — Tous les cours"},...folders.map(f=>({id:f.id,label:folderPath(folders,f.id).join(" / ")}))]; 
