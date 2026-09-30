@@ -131,8 +131,6 @@ function App(){
        pdfBlobRef.url=url;
        setPdfNativeUrl(url);
      }
-     pdfCache.current.set(c.id,doc);
-     setPdfDoc(doc);
    }catch(err){
      console.error("RMed PDF open error:",err);
      setPdfDoc(null);
