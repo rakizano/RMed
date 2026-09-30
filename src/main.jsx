@@ -514,7 +514,7 @@ function App(){
     setCards(x=>x.map(c=>c.id===draft.editingId?{...c,front:draft.front.trim(),back:draft.back.trim(),images:draft.images||[],type:draft.type||c.type||"basic"}:c));
    }else{
     const hId=draft.highlightId;
-    setCards(x=>[...x,{id:uid(),courseId:course.id,pageId:(course.pages.find(x=>x.n===Number(draft.page||pageNumber))||currentPage()).id,page:Number(draft.page||pageNumber),highlightId:hId,source:draft.source||draft.back,images:draft.images||[],type:"basic",front:draft.front.trim(),back:draft.back.trim(),level:null,next:Date.now(),created:Date.now()}]);
+    setCards(x=>[...x,{id:uid(),courseId:course.id,pageId:(course.pages.find(x=>x.n===Number(draft.page||pageNumber))||currentPage()).id,page:Number(draft.page||pageNumber),highlightId:hId,source:draft.source||draft.back,images:draft.images||[],type:draft.type||"basic",front:draft.front.trim(),back:draft.back.trim(),level:null,next:Date.now(),created:Date.now()}]);
    }
    setModal(false);setDraft(null);setSel(null);
  }
