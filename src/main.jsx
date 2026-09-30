@@ -13,7 +13,7 @@ const demo={id:"demo",title:"Mitose — cours de démonstration",kind:"demo",pag
 const levels=[["again","🔴","Pas du tout",10],["hard","🟠","Difficile",1440],["medium","🟡","Moyen",4320],["good","🟢","Bien acquis",10080],["perfect","🔵","Parfait",30240]];
 const load=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}};
 const uid=()=>crypto.randomUUID?.()||String(Date.now())+Math.random().toString(16).slice(2);
-async function openPdfDocument(data){const bytes=data instanceof Uint8Array?data:new Uint8Array(data);return await pdfjsLib.getDocument({data:bytes,disableWorker:true,isEvalSupported:false,useSystemFonts:true}).promise}
+async function openPdfDocument(data){const source=data instanceof ArrayBuffer?data.slice(0):data;const bytes=source instanceof Uint8Array?new Uint8Array(source):new Uint8Array(source);return await pdfjsLib.getDocument({data:bytes.slice(0),disableWorker:true,isEvalSupported:false,useSystemFonts:true,verbosity:0}).promise}
 
 const dbPromise=typeof indexedDB==="undefined"?Promise.resolve(null):new Promise((resolve,reject)=>{
  const req=indexedDB.open("rmed-files",1);
@@ -91,19 +91,20 @@ function App(){
  function nav(t){setTab(t);if(t==="review"){setRi(0);setRevealed(false)}}
 
  async function addPdf(file){
-   if(!file||file.type!=="application/pdf"){alert("Choisis un fichier PDF.");return}
+   if(!file){return} if(file.type&&file.type!=="application/pdf"&&!/\.pdf$/i.test(file.name)){alert("Choisis un fichier PDF.");return}
    setPdfLoading(true);
    try{
      const buffer=await file.arrayBuffer();
+     if(!buffer||buffer.byteLength<5)throw new Error("Fichier vide ou illisible");
      const id=uid();
-     const doc=await openPdfDocument(buffer);
+     const doc=await openPdfDocument(buffer.slice(0));
      const pages=Array.from({length:doc.numPages},(_,i)=>({id:uid(),n:i+1}));
      const c={id,title:file.name.replace(/\.pdf$/i,""),kind:"pdf",pages,created:Date.now()};
      await savePdf(id,buffer);
      pdfCache.current.set(id,doc);
      setCourses(x=>[...x,c]);
      setCourse(c);setPageNumber(1);setPdfDoc(doc);setTab("course");setUploadOpen(false);
-   }catch(err){console.error(err);alert("Impossible d’ouvrir ce PDF. Vérifie qu’il s’agit bien d’un fichier PDF valide.")}
+   }catch(err){console.error("PDF import error:",err);alert("Impossible d’ouvrir ce PDF. "+(err?.message||"Erreur inconnue"))}
    finally{setPdfLoading(false)}
  }
 
