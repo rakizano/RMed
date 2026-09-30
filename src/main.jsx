@@ -138,8 +138,7 @@ function App(){
 
  function onSelection(selection){
    if(!selection?.text)return;
-   const hId=addHighlight(selection);
-   setSel({...selection,highlightId:hId});
+   setSel({...selection,highlightId:null});
    makeSuggestions(selection);
  }
 
@@ -299,8 +298,8 @@ function PDFPage({pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus
  </div></div>
 }
 
-function SelectionBar({sel,suggestions,onCreate,onUse}){
- return <div className="selection-bar"><div className="selection-main"><Highlighter size={17}/><b>Passage sélectionné</b><span>« {sel.text} »</span><button className="primary" onClick={onCreate}><Plus/>Créer une flashcard</button></div><div className="suggestions-inline">{suggestions.map(s=><button key={s.type} className="suggestion-mini" onClick={()=>onUse(s)}><span>{s.icon}</span><b>{s.title}</b></button>)}</div></div>
+function SelectionBar({sel,suggestions,highlighted,onHighlight,onCreate,onUse}){
+ return <div className="selection-bar"><div className="selection-main"><Highlighter size={17}/><b>Passage sélectionné</b><span>« {sel.text} »</span><button className={"highlight-action "+(highlighted?"done":"")} onClick={onHighlight} disabled={highlighted}>{highlighted?"✓ Surligné":"Surligner"}</button><button className="primary" onClick={onCreate}><Plus/>Créer une flashcard</button></div><div className="suggestions-title"><Sparkles size={14}/> Choisis un format proposé par RMed</div><div className="suggestions-inline">{suggestions.map(s=><button key={s.type} className="suggestion-mini" onClick={()=>onUse(s)}><span>{s.icon}</span><b>{s.title}</b></button>)}</div></div>
 }
 
 function Cards({cards,search,open,del}){
