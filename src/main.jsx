@@ -433,7 +433,8 @@ function App(){
  
  async function openCreator(selection=sel){
    if(!selection?.text?.trim())return;
-   setDraft({type:"basic",front:"",back:"",highlightId:selection.highlightId||null,source:selection.text,page:pageNumber,aiGenerating:true,aiError:""});
+   const hId=selection.highlightId||persistSelection(selection,highlightColor);
+   setDraft({type:"basic",front:"",back:"",highlightId:hId,source:selection.text,page:pageNumber,aiGenerating:true,aiError:""});
    setModal(true);
    try{
     const aiContext=await getSelectionAIContext(selection);
