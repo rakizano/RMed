@@ -1,6 +1,6 @@
 import React,{useEffect,useMemo,useRef,useState}from"react";
 import{createRoot}from"react-dom/client";
-import{BookOpen,Brain,ChevronLeft,ChevronRight,Clock3,FileText,History,Home as HomeIcon,ListChecks,Minus,Plus,Search,Sparkles,Target,Trash2,Upload,X,Highlighter}from"lucide-react";
+import{BookOpen,Brain,ChevronLeft,ChevronRight,Clock3,FileText,History,Home as HomeIcon,ListChecks,Minus,Plus,Search,Sparkles,Target,Trash2,Upload,X,Highlighter,Lock,Unlock}from"lucide-react";
 import"./styles.css";
 
 
@@ -90,6 +90,7 @@ function App(){
  const[revealed,setRevealed]=useState(false);
  const[ri,setRi]=useState(0);
  const[qcm,setQcm]=useState(null);
+ const[pdfLocked,setPdfLocked]=useState(false);
  const[uploadOpen,setUploadOpen]=useState(false);
  const pdfCache=useRef(new Map());
 
@@ -257,9 +258,9 @@ function Course({course,pageNumber,setPageNumber,pdfDoc,pdfLoading,zoom,setZoom,
    <div className="notes-list">{highlights.length?highlights.map(h=><div className="note-card" key={h.id}><div className="marker"></div><p>« {h.text} »</p><button onClick={()=>onSelection({text:h.text,rects:h.rects,context:h.context,highlightId:h.id})}>Créer une carte</button></div>):<div className="notes-empty"><Highlighter/><p>Surligne un élément important dans le PDF.<br/>Tes passages apparaîtront ici.</p></div>}</div>
   </aside>
   <section className="pdf-reader">
-   <div className="pdf-toolbar"><button className="tool-label" title="Surligner les passages sélectionnés"><Highlighter/><span>Surligner</span></button><button onClick={prev} disabled={pageNumber<=1}><ChevronLeft/></button><span>Page <b>{pageNumber}</b> / {course.pages.length}</span><button onClick={next} disabled={pageNumber>=course.pages.length}><ChevronRight/></button><span className="spacer"/><button onClick={()=>setZoom(z=>Math.max(.75,z-.1))}><Minus/></button><span>{Math.round(zoom*100)}%</span><button onClick={()=>setZoom(z=>Math.min(2.5,z+.1))}><Plus/></button></div>
+   <div className="pdf-toolbar"><button className={"tool-label "+(pdfLocked?"locked":"")} onClick={()=>setPdfLocked(v=>!v)} title={pdfLocked?"Déverrouiller le déplacement du PDF":"Verrouiller le déplacement du PDF"}>{pdfLocked?<Lock/>:<Unlock/>}<span>{pdfLocked?"PDF verrouillé":"Verrouiller PDF"}</span></button><button onClick={prev} disabled={pageNumber<=1}><ChevronLeft/></button><span>Page <b>{pageNumber}</b> / {course.pages.length}</span><button onClick={next} disabled={pageNumber>=course.pages.length}><ChevronRight/></button><span className="spacer"/><button onClick={()=>setZoom(z=>Math.max(.75,z-.1))}><Minus/></button><span>{Math.round(zoom*100)}%</span><button onClick={()=>setZoom(z=>Math.min(2.5,z+.1))}><Plus/></button></div>
    {pdfLoading&&<div className="pdf-state">Ouverture du PDF…</div>}
-   {course.kind==="pdf"&&pdfDoc?<PDFPage pdfDoc={pdfDoc} pageNumber={pageNumber} scale={zoom} highlights={highlights} focusHighlightId={focusHighlightId} clearFocus={clearFocus} onSelection={onSelection}/>:course.kind==="demo"?<DemoPage pg={pg} onSelection={onSelection}/>:<div className="pdf-state">PDF indisponible. Réimporte-le pour continuer.</div>}
+   {course.kind==="pdf"&&pdfDoc?<PDFPage pdfDoc={pdfDoc} pageNumber={pageNumber} scale={zoom} highlights={highlights} focusHighlightId={focusHighlightId} clearFocus={clearFocus} onSelection={onSelection} locked={pdfLocked}/>:course.kind==="demo"?<DemoPage pg={pg} onSelection={onSelection}/>:<div className="pdf-state">PDF indisponible. Réimporte-le pour continuer.</div>}
    {sel&&<SelectionBar sel={sel} suggestions={suggestions} onHighlight={()=>{}} onCreate={()=>openCreator(sel)} onUse={applySuggestion}/>}
   </section>
  </div></div>
@@ -276,9 +277,11 @@ function DemoPage({pg,onSelection}){
  return <div className="demo-paper" ref={ref} onMouseUp={getSelection} onTouchEnd={getSelection}><small>PAGE {pg.n}</small><p>{pg.text}</p><p className="hint">Sélectionne un passage comme dans un vrai PDF pour créer une carte.</p></div>
 }
 
-function PDFPage({pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus,onSelection}){
+function PDFPage({pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus,onSelection,locked}){
  const pageRef=useRef(null),canvasRef=useRef(null),textRef=useRef(null),contextRef=useRef("");
- const penRef=useRef({active:false,points:[],spans:new Set(),pointerId:null});
+ const penRef=useRef({active:false,points:[],spans:new Set(),pointerId:null,scrollLeft:0,scrollTop:0});
+ const[tempRects,setTempRects]=useState([]);
+ const[tempText,setTempText]=useState("");
  const[height,setHeight]=useState(800);
 
  useEffect(()=>{let cancelled=false;
@@ -321,19 +324,33 @@ function PDFPage({pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus
    const p=penRef.current;
    const els=document.elementsFromPoint(e.clientX,e.clientY);
    els.forEach(el=>{if(el.classList?.contains("pdf-word"))p.spans.add(el)});
+   const root=pageRef.current?.getBoundingClientRect();
+   if(root){
+     const rects=[...p.spans].map(el=>{const r=el.getBoundingClientRect();return{x:r.left-root.left,y:r.top-root.top,width:r.width,height:r.height,order:[...textRef.current.children].indexOf(el)}})
+       .filter(r=>r.width>1&&r.height>1).sort((a,b)=>a.order-b.order);
+     setTempRects(rects.map(({order,...r})=>r));
+     setTempText([...p.spans].map(el=>el.textContent).join(" ").replace(/\\s+/g," ").trim());
+   }
    p.points.push({x:e.clientX,y:e.clientY});
  }
 
  function penDown(e){
    if(e.pointerType!=="pen")return;
    e.preventDefault();
-   penRef.current={active:true,points:[],spans:new Set(),pointerId:e.pointerId};
+   const stage=pageRef.current?.parentElement;
+   penRef.current={active:true,points:[],spans:new Set(),pointerId:e.pointerId,scrollLeft:stage?.scrollLeft||0,scrollTop:stage?.scrollTop||0};
+   if(stage){stage.scrollLeft=penRef.current.scrollLeft;stage.scrollTop=penRef.current.scrollTop}
    e.currentTarget.setPointerCapture?.(e.pointerId);
    addPenPoint(e);
  }
  function penMove(e){
    if(!penRef.current.active||e.pointerType!=="pen")return;
    e.preventDefault();
+   const stage=pageRef.current?.parentElement;
+   if(stage){
+     stage.scrollLeft=penRef.current.scrollLeft;
+     if(locked)stage.scrollTop=penRef.current.scrollTop;
+   }
    addPenPoint(e);
  }
  function penUp(e){
@@ -342,6 +359,8 @@ function PDFPage({pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus
    e.preventDefault();
    p.active=false;
    const spans=[...p.spans];
+   setTempRects([]);
+   setTempText("");
    if(!spans.length)return;
    const root=pageRef.current.getBoundingClientRect();
    const rects=spans.map(el=>{const r=el.getBoundingClientRect();return{x:r.left-root.left,y:r.top-root.top,width:r.width,height:r.height,order:[...textRef.current.children].indexOf(el)}}).filter(r=>r.width>1&&r.height>1).sort((a,b)=>a.order-b.order);
@@ -359,9 +378,9 @@ function PDFPage({pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus
    onSelection({text:t,rects,context:contextRef.current});
    s.removeAllRanges();
  }
- return <div className="pdf-stage"><div className="pdf-page" ref={pageRef} style={{height}} onPointerDown={penDown} onPointerMove={penMove} onPointerUp={penUp} onPointerCancel={penUp} onMouseUp={select}>
+ return <div className={"pdf-stage "+(locked?"pdf-stage-locked":"")}><div className="pdf-page" ref={pageRef} style={{height}} onPointerDown={penDown} onPointerMove={penMove} onPointerUp={penUp} onPointerCancel={penUp} onMouseUp={select}>
    <canvas ref={canvasRef}/>
-   <div className="pdf-highlights">{highlights.map(h=><div key={h.id} id={"hl-"+h.id} className="highlight-group" onClick={()=>onSelection({text:h.text,rects:h.rects,context:h.context,highlightId:h.id})}>{h.rects.map((r,i)=><span key={i} style={{left:r.x,top:r.y,width:r.width,height:r.height}}/> )}</div>)}</div>
+   <div className="pdf-highlights"><div className="highlight-group live-highlight">{tempRects.map((r,i)=><span key={"t"+i} style={{left:r.x,top:r.y,width:r.width,height:r.height}}/> )}</div>{highlights.map(h=><div key={h.id} id={"hl-"+h.id} className="highlight-group" onClick={()=>onSelection({text:h.text,rects:h.rects,context:h.context,highlightId:h.id})}>{h.rects.map((r,i)=><span key={i} style={{left:r.x,top:r.y,width:r.width,height:r.height}}/> )}</div>)}</div>
    <div className="pdf-text" ref={textRef}/>
  </div></div>
 }
