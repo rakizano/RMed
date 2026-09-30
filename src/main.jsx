@@ -1263,7 +1263,8 @@ function AIChat({courses,course,selection,embedded=false}){
    const resource=await retrieveResourceContext(courses,{courseId:course?.id||null,query:q,limit:14000,maxChunks:12});
    const selectedContext=selection?.text?("PASSAGE SÉLECTIONNÉ :\n"+selection.text+"\n\n"+(selection.context||"")):"";
    const context=[selectedContext,resource].filter(Boolean).join("\n\n");
-   const data=await callRMedAI({action:"chat",text:q,context});
+   const conversation=messages.slice(-8).map(m=>(m.role==="user"?"Étudiant":"RMed")+": "+m.content).join("\n");
+   const data=await callRMedAI({action:"chat",text:q,context:[conversation?"HISTORIQUE DE CONVERSATION:\n"+conversation:"",context].filter(Boolean).join("\n\n")});
    setMessages(prev=>[...prev,{role:"assistant",content:data?.answer||"Je n’ai pas réussi à répondre."}]);
   }catch(err){
    setError(err?.message||"Impossible de contacter RMed IA.");
