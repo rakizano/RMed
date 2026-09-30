@@ -29,9 +29,13 @@ module.exports=async function handler(req,res){
   if(req.method!=="POST")return json(res,405,{error:"Méthode non autorisée."});
   if(!process.env.OPENAI_API_KEY)return json(res,500,{error:"OPENAI_API_KEY n’est pas configurée sur le backend."});
 
-  const action=String(req.body?.action||"flashcard");
-  const text=String(req.body?.text||"").trim();
-  const context=String(req.body?.context||"").trim();
+  let body=req.body||{};
+  if(typeof body==="string"){
+    try{body=JSON.parse(body)}catch{return json(res,400,{error:"Requête IA illisible."})}
+  }
+  const action=String(body?.action||"flashcard");
+  const text=String(body?.text||"").trim();
+  const context=String(body?.context||"").trim();
   if(!text)return json(res,400,{error:"Aucun passage n’a été fourni."});
   if(text.length>12000)return json(res,413,{error:"Passage trop long."});
 
