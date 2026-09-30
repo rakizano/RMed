@@ -1,6 +1,6 @@
 import React,{useEffect,useMemo,useRef,useState}from"react";
 import{createRoot}from"react-dom/client";
-import{BookOpen,Brain,ChevronLeft,ChevronRight,Clock3,FileText,Folder,FolderPlus,History,Home as HomeIcon,ListChecks,Minus,Plus,Search,Sparkles,Target,Trash2,Upload,X,Highlighter,Lock,Unlock,Palette,PenLine,Eraser,ExternalLink,ArrowLeft}from"lucide-react";
+import{BookOpen,Brain,ChevronLeft,ChevronRight,Clock3,FileText,Folder,FolderPlus,History,Home as HomeIcon,ListChecks,Minus,Plus,Search,Sparkles,Target,Trash2,Upload,X,Highlighter,ExternalLink,ArrowLeft,MousePointer2,Hand}from"lucide-react";
 import pdfWorkerUrl from"pdfjs-dist/build/pdf.worker.min.js?url";
 import"./styles.css";
 
@@ -286,6 +286,8 @@ function App(){
  const[qcm,setQcm]=useState(null);
  const[uploadOpen,setUploadOpen]=useState(false);
  const[aiOpen,setAiOpen]=useState(false);
+ const[explainSelection,setExplainSelection]=useState(null);
+ const[highlightColor,setHighlightColor]=useState("#ffe66d99");
  const pdfCache=useRef(new Map());
 
  useEffect(()=>save("rmed_courses",courses),[courses]);
