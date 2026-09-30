@@ -445,7 +445,6 @@ function App(){
  function eraseHighlight(id){
  if(!id)return;
  setHighlights(x=>x.filter(h=>h.id!==id));
- setCards(x=>x.filter(c=>c.highlightId!==id));
  setSel(current=>current?.highlightId===id?null:current);
  setSuggestions([]);
 }
