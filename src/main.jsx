@@ -1,11 +1,9 @@
 import React,{useEffect,useMemo,useRef,useState}from"react";
 import{createRoot}from"react-dom/client";
 import{BookOpen,Brain,ChevronLeft,ChevronRight,Clock3,FileText,History,Home as HomeIcon,ListChecks,Minus,Plus,Search,Sparkles,Target,Trash2,Upload,X,Highlighter}from"lucide-react";
-import*as pdfjsLib from"pdfjs-dist";
-import workerUrl from"pdfjs-dist/build/pdf.worker.min.mjs?url";
+import*as pdfjsLib from"pdfjs-dist/legacy/build/pdf.mjs";
 import"./styles.css";
 
-pdfjsLib.GlobalWorkerOptions.workerSrc=workerUrl;
 
 const demo={id:"demo",title:"Mitose — cours de démonstration",kind:"demo",pages:[
 {id:"p1",n:1,text:"Le centrosome est le principal centre organisateur des microtubules. Il est constitué de deux centrioles disposés perpendiculairement, entourés de matériel péricentriolaire."},
@@ -15,6 +13,7 @@ const demo={id:"demo",title:"Mitose — cours de démonstration",kind:"demo",pag
 const levels=[["again","🔴","Pas du tout",10],["hard","🟠","Difficile",1440],["medium","🟡","Moyen",4320],["good","🟢","Bien acquis",10080],["perfect","🔵","Parfait",30240]];
 const load=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}};
 const uid=()=>crypto.randomUUID?.()||String(Date.now())+Math.random().toString(16).slice(2);
+async function openPdfDocument(data){const bytes=data instanceof Uint8Array?data:new Uint8Array(data);return await pdfjsLib.getDocument({data:bytes,disableWorker:true,isEvalSupported:false,useSystemFonts:true}).promise}
 
 const dbPromise=typeof indexedDB==="undefined"?Promise.resolve(null):new Promise((resolve,reject)=>{
  const req=indexedDB.open("rmed-files",1);
@@ -77,7 +76,7 @@ function App(){
      if(pdfCache.current.has(c.id)){setPdfDoc(pdfCache.current.get(c.id));return}
      const data=await getPdf(c.id);
      if(!data){setPdfDoc(null);return}
-     const doc=await pdfjsLib.getDocument({data}).promise;
+     const doc=await openPdfDocument(data);
      pdfCache.current.set(c.id,doc);
      setPdfDoc(doc);
    }catch(err){console.error(err);setPdfDoc(null)}
@@ -97,7 +96,7 @@ function App(){
    try{
      const buffer=await file.arrayBuffer();
      const id=uid();
-     const doc=await pdfjsLib.getDocument({data:buffer}).promise;
+     const doc=await openPdfDocument(buffer);
      const pages=Array.from({length:doc.numPages},(_,i)=>({id:uid(),n:i+1}));
      const c={id,title:file.name.replace(/\.pdf$/i,""),kind:"pdf",pages,created:Date.now()};
      await savePdf(id,buffer);
