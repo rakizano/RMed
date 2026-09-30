@@ -212,8 +212,12 @@ function Course({course,pageNumber,setPageNumber,pdfDoc,pdfLoading,zoom,setZoom,
  const prev=()=>setPageNumber(Math.max(1,pageNumber-1));
  const next=()=>setPageNumber(Math.min(course.pages.length,pageNumber+1));
  return <div className="page"><div className="title"><div><small>LECTEUR DE COURS</small><h1>{course.title}</h1></div><button className="upload" onClick={()=>openUpload?.()}><Upload/>Importer un PDF</button></div>
- <div className="reader">
-  <aside className="courseSide"><b>Mes cours</b>{courses.map(c=><button className={c.id===course.id?"selected":""} key={c.id} onClick={()=>open(c)}><FileText/>{c.title}</button>)}</aside>
+ <div className="course-switcher">{courses.map(c=><button className={c.id===course.id?"selected":""} key={c.id} onClick={()=>open(c)}><FileText/>{c.title}</button>)}</div>
+ <div className="reader split-reader">
+  <aside className="notes-pane">
+   <div className="notes-head"><div><small>NOTES & FLASHCARDS</small><b>{course.title}</b></div><span>{highlights.length} surlignage(s)</span></div>
+   <div className="notes-list">{highlights.length?highlights.map(h=><div className="note-card" key={h.id}><div className="marker"></div><p>« {h.text} »</p><button onClick={()=>onSelection({text:h.text,rects:h.rects,context:h.context,highlightId:h.id})}>Créer une carte</button></div>):<div className="notes-empty"><Highlighter/><p>Surligne un élément important dans le PDF.<br/>Tes passages apparaîtront ici.</p></div>}</div>
+  </aside>
   <section className="pdf-reader">
    <div className="pdf-toolbar"><button className="tool-label" title="Surligner les passages sélectionnés"><Highlighter/><span>Surligner</span></button><button onClick={prev} disabled={pageNumber<=1}><ChevronLeft/></button><span>Page <b>{pageNumber}</b> / {course.pages.length}</span><button onClick={next} disabled={pageNumber>=course.pages.length}><ChevronRight/></button><span className="spacer"/><button onClick={()=>setZoom(z=>Math.max(.75,z-.1))}><Minus/></button><span>{Math.round(zoom*100)}%</span><button onClick={()=>setZoom(z=>Math.min(2.5,z+.1))}><Plus/></button></div>
    {pdfLoading&&<div className="pdf-state">Ouverture du PDF…</div>}
