@@ -1059,7 +1059,7 @@ function ExplainSelectionModal({selection,course,getContext,onClose}){
    <div className="explain-source"><small>{course?.title||"Ton cours"}</small><p>« {selection.text} »</p></div>
    {busy?<div className="explain-loading"><Sparkles size={18}/> Recherche Wikipédia…</div>:
     aiFallback?<div className="ai-answer">{aiAnswer}</div>:
-    article?<><div className="wikipedia-result"><div className="wikipedia-label">WIKIPÉDIA</div><h3>{article.title}</h3><p dangerouslySetInnerHTML={{__html:article.extract}}/></div><div className="actions"><a className="primary explain-wikipedia-link" href={article.url} target="_blank" rel="noreferrer">Ouvrir l’article Wikipédia ↗</a><button onClick={useAI} disabled={aiBusy}>{aiBusy?"RMed prépare…":"Compléter avec RMed IA"}</button></div></>:
+    article?<><div className="wikipedia-result"><div className="wikipedia-label">WIKIPÉDIA</div><h3>{article.title}</h3><p>{article.extract}</p></div><div className="actions"><a className="primary explain-wikipedia-link" href={article.url} target="_blank" rel="noreferrer">Ouvrir l’article Wikipédia ↗</a><button onClick={useAI} disabled={aiBusy}>{aiBusy?"RMed prépare…":"Compléter avec RMed IA"}</button></div></>:
     <><div className="ai-error">{error}</div><div className="actions"><button onClick={useAI} disabled={aiBusy}>{aiBusy?"RMed prépare…":"Essayer avec RMed IA"}</button></div></>}
    {!busy&&article&&!aiFallback&&error&&<div className="ai-error">{error}</div>}
    <div className="actions"><button onClick={onClose}>Fermer</button></div>
