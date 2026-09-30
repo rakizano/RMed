@@ -33,7 +33,7 @@ async function callRMedAI({action,text,context=""}){
  const endpoint=getAIEndpoint();
  if(!endpoint)throw new Error("IA non connectée : le backend RMed doit être configuré.");
  const controller=new AbortController();
- const timeoutMs=action==="qcm_session"?90000:45000;
+ const timeoutMs=action==="qcm_session"?90000:action==="explain_error"?15000:45000;
  const timer=setTimeout(()=>controller.abort(),timeoutMs);
  try{
   const res=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"text/plain;charset=UTF-8"},signal:controller.signal,body:JSON.stringify({action,text:String(text||"").slice(0,12000),context:String(context||"").slice(0,30000)})});
@@ -874,6 +874,7 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,c
  }
 
  function penDown(e){
+  if(markTool==="highlight")return;
   if(e.pointerType!=="pen")return;
   if(!pageRef.current?.contains(e.target))return;
   e.preventDefault();
@@ -911,6 +912,7 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,c
  }
 
  function penMove(e){
+  if(markTool==="highlight")return;
   const p=penRef.current;
   if(!p.active||e.pointerType!=="pen"||e.pointerId!==p.pointerId)return;
   e.preventDefault();
@@ -924,6 +926,7 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,c
  }
 
  function penUp(e){
+  if(markTool==="highlight")return;
   const p=penRef.current;
   if(!p.active||e.pointerType!=="pen"||e.pointerId!==p.pointerId)return;
   e.preventDefault();
@@ -1042,8 +1045,8 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,c
   s.removeAllRanges();
  }
 
- return <div className={"pdf-stage "+(locked?"pdf-stage-locked":"")} onTouchStart={touchStart} onTouchMove={touchMoveNative} onTouchEnd={touchEnd} onTouchCancel={touchEnd}>
-  <div className="pdf-page" ref={pageRef} style={{height}} onMouseUp={select}>
+ return <div className={"pdf-stage tool-"+markTool+" "+(locked?"pdf-stage-locked":"")} onTouchStart={touchStart} onTouchMove={touchMoveNative} onTouchEnd={touchEnd} onTouchCancel={touchEnd}>
+  <div className="pdf-page" ref={pageRef} style={{height}} onMouseUp={select} onPointerUp={e=>{if(e.pointerType==="pen"&&markTool==="highlight")window.setTimeout(select,80)}}>
    <canvas ref={canvasRef}/>
    <div className="pdf-highlights">
     {drawings.length>0&&<svg className="drawings-layer" viewBox={"0 0 "+Math.max(1,pageRef.current?.clientWidth||1)+" "+Math.max(1,pageRef.current?.clientHeight||1)} preserveAspectRatio="none">{drawings.map(d=><polyline key={d.id} points={d.points.map(p=>p.x+","+p.y).join(" ")} fill="none" stroke={d.color} strokeWidth={d.width||5} strokeLinecap="round" strokeLinejoin="round"/>)}</svg>}
@@ -1375,11 +1378,11 @@ function Review({rc,revealed,setRevealed,rate,total,i,courses,folders,course,act
   if(!rc||helpBusy)return;
   setHelpBusy(true);setHelp("");setHelpError("");
   try{
-   const resource=await retrieveResourceContext(courses,{courseId:rc.courseId,query:rc.front+" "+rc.back,limit:9000,maxChunks:9});
+   const resource=await retrieveResourceContext(courses,{courseId:rc.courseId,query:rc.front+" "+rc.back,limit:4500,maxChunks:5});
    const data=await callRMedAI({
     action:"explain_error",
     text:"Je viens de voir cette flashcard. Explique-moi le concept sans simplement répéter la réponse.",
-    context:"FLASHCARD :\nQuestion : "+rc.front+"\nRéponse attendue : "+rc.back+"\n\nRESSOURCES PERTINENTES :\n"+resource+"\n\nDemande : explique le point de blocage probable, avec d’autres mots, une analogie si utile, puis reviens au vocabulaire PASS."
+    context:"FLASHCARD :\nQuestion : "+rc.front+"\nRéponse : "+rc.back+"\n\nRESSOURCES :\n"+resource+"\n\nDemande : explique très brièvement le point clé avec des mots simples. 3 à 5 phrases maximum, puis termine par « À retenir : … »."
    });
    setHelp(data?.answer||"Je n’ai pas réussi à formuler l’explication.");
   }catch(err){setHelpError(err?.message||"Impossible de contacter RMed IA.")}finally{setHelpBusy(false)}
