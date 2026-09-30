@@ -572,20 +572,57 @@ function App(){
 }
 
 function Nav({icon,t,a,f}){return <button className={a?"nav active":"nav"} onClick={f}>{icon}<span>{t}</span></button>}
-function Home({cards,due,courses,nav,open}){const palette=["yellow","lavender","mint","coral"];const visuals=["paper","cells","books","brain"];const progressFor=c=>Math.min(100,Math.max(8,(cards.filter(x=>x.courseId===c.id).length/Math.max(1,cards.length))*100));return <div className="page home-redesign">
- <div className="home-top"><div><div className="library-kicker">MA BIBLIOTHÈQUE <span>⌄</span></div><h1>Ton espace de travail</h1><p className="home-caption">Cours, cartes et révisions au même endroit.</p></div><button className="round-search" onClick={()=>nav("cards")} title="Rechercher"><Search size={18}/></button></div>
- <section className="welcome-strip"><div><span>RMed • PASS</span><strong>Prêt à travailler ?</strong><small>Surligne un passage, transforme-le en carte, puis révise.</small></div><div className="welcome-doodle"><i/><i/><i/><b>R</b></div></section>
- <div className="home-stats"><div><strong>{cards.length}</strong><span>flashcards</span></div><div><strong>{due}</strong><span>à réviser</span></div><div><strong>{courses.length}</strong><span>cours</span></div><div><strong>{cards.filter(c=>c.level==="perfect"||c.level==="good").length}</strong><span>acquises</span></div></div>
- <section className="source-grid">{courses.slice(0,4).map((c,i)=><button className={"source-card "+palette[i%palette.length]} key={c.id} onClick={()=>open(c)}>
+function Home({cards,due,courses,nav,open}){const palette=["yellow","lavender","mint","coral"];const visuals=["paper","cells","books","brain"];const acquired=cards.filter(c=>c.level==="perfect"||c.level==="good").length;const reviewPct=cards.length?Math.round((acquired/cards.length)*100):0;const progressFor=c=>Math.min(100,Math.max(8,(cards.filter(x=>x.courseId===c.id).length/Math.max(1,cards.length))*100));return <div className="page home-redesign">
+ <div className="home-top">
+  <div><div className="library-kicker">RMed <span>•</span> ESPACE D’ÉTUDE</div><h1>Bienvenue dans ton studio 🫶</h1><p className="home-caption">Ici, tu lis, tu comprends, tu transformes et tu révises.</p></div>
+  <button className="round-search" onClick={()=>nav("cards")} title="Rechercher"><Search size={18}/></button>
+ </div>
+ <section className="hero-studio">
+  <div className="hero-copy">
+   <div className="hero-eyebrow"><span className="hero-dot"/> SESSION DU JOUR</div>
+   <h2>Une petite session,<br/><em>un gros pas en avant.</em></h2>
+   <p>Commence par un cours. RMed garde les passages importants, fabrique tes cartes et t’aide à les revoir au bon moment.</p>
+   <div className="hero-actions"><button className="hero-main-action" onClick={()=>nav("course")}>Commencer à travailler <ChevronRight size={17}/></button><button className="hero-soft-action" onClick={()=>nav("review")}><Brain size={16}/> Réviser maintenant</button></div>
+  </div>
+  <div className="hero-illustration">
+   <div className="orbit orbit-a"/><div className="orbit orbit-b"/>
+   <div className="float-card float-card-a"><span>⚡</span><b>Focus</b><small>25 min</small></div>
+   <div className="float-card float-card-b"><span>🧠</span><b>{acquired}</b><small>acquises</small></div>
+   <div className="mascot"><div className="mascot-ear left"/><div className="mascot-ear right"/><div className="mascot-face"><i/><i/><b>⌣</b></div><div className="mascot-body"/></div>
+  </div>
+ </section>
+
+ <div className="home-stats">
+  <div className="stat-chip chip-yellow"><span className="chip-icon">📚</span><div><strong>{courses.length}</strong><small>cours</small></div></div>
+  <div className="stat-chip chip-lav"><span className="chip-icon">🃏</span><div><strong>{cards.length}</strong><small>flashcards</small></div></div>
+  <div className="stat-chip chip-mint"><span className="chip-icon">↺</span><div><strong>{due}</strong><small>à revoir</small></div></div>
+  <div className="stat-chip chip-coral"><span className="chip-icon">✓</span><div><strong>{reviewPct}%</strong><small>maîtrisé</small></div></div>
+ </div>
+
+ <section className="section-heading-block"><div><span>TA BIBLIOTHÈQUE</span><h2>Les cours qui t’attendent</h2></div><button onClick={()=>nav("course")}>Tout voir <ChevronRight size={14}/></button></section>
+ <section className="source-grid source-grid-premium">{courses.slice(0,4).map((c,i)=><button className={"source-card "+palette[i%palette.length]} key={c.id} onClick={()=>open(c)}>
    <div className="source-card-top"><span className="source-type">{c.kind==="pdf"?"PDF":"COURS"}</span><span className="source-emoji">{visuals[i%visuals.length]==="paper"?"📄":visuals[i%visuals.length]==="cells"?"🧬":visuals[i%visuals.length]==="books"?"📚":"🧠"}</span></div>
    <div className={"source-art art-"+visuals[i%visuals.length]}><span/><span/><span/><b>{i+1}</b></div>
    <b>{c.title}</b><small>{c.pages.length} pages • {cards.filter(x=>x.courseId===c.id).length} cartes</small>
    <div className="source-progress"><span style={{width:progressFor(c)+"%"}}/></div>
  </button>)}</section>
- <button className="add-source-card" onClick={()=>nav("course")}><span>＋</span><div><b>Ajouter une source</b><small>PDF, cours et documents pour construire ton espace de révision</small></div><ChevronRight size={18}/></button>
- <section className="home-section"><div className="section-line"><h2>Cette semaine</h2><span>{cards.length} cartes</span></div><div className="big-week"><div><small>J’AI APPRIS</small><strong>{cards.length}</strong><p>cartes disponibles dans ta bibliothèque</p></div><div className="week-side"><div className="week-bubble">🔥<b>{cards.filter(c=>c.level==="perfect"||c.level==="good").length}</b><span>acquises</span></div><div className="week-tiny"><span>à réviser</span><b>{due}</b></div></div></div></section>
- <section className="home-section"><div className="section-line"><h2>Continuer</h2><button onClick={()=>nav("course")}>Tout voir</button></div>{courses.slice(0,3).map(c=><button className="continue-row" key={c.id} onClick={()=>open(c)}><span className="continue-icon">📘</span><div><b>{c.title}</b><small>{c.pages.length} pages • {cards.filter(x=>x.courseId===c.id).length} cartes</small><div className="row-progress"><span style={{width:progressFor(c)+"%"}}/></div></div><ChevronRight size={18}/></button>)}</section>
- <section className="quick-actions"><button onClick={()=>nav("review")}><Brain size={19}/><b>Réviser</b><small>{due} cartes</small></button><button onClick={()=>nav("qcm")}><ListChecks size={19}/><b>Quiz</b><small>30 questions</small></button><button onClick={()=>nav("cards")}><Target size={19}/><b>Flashcards</b><small>{cards.length} cartes</small></button><button onClick={()=>nav("ai")}><Sparkles size={19}/><b>RMed IA</b><small>Assistant</small></button></section>
+
+ <button className="add-source-card add-source-premium" onClick={()=>nav("course")}><span>＋</span><div><b>Ajouter une nouvelle source</b><small>Dépose un PDF et transforme-le en terrain de révision.</small></div><div className="add-source-badge">GO <ChevronRight size={13}/></div></button>
+
+ <section className="home-section">
+  <div className="section-line"><div><span className="micro-label">TON RYTHME</span><h2>Cette semaine</h2></div><span>{cards.length} cartes créées</span></div>
+  <div className="progress-board">
+   <div className="progress-board-left"><div className="progress-ring"><strong>{reviewPct}</strong><span>%</span></div><div><b>Ton terrain de jeu grandit.</b><p>{acquired} cartes bien acquises sur {cards.length || 0}. Continue doucement, mais régulièrement.</p></div></div>
+   <div className="progress-spark"><span>↗</span><b>Rythme</b><small>{due ? "Quelques cartes t’attendent." : "Tout est à jour 🎉"}</small></div>
+  </div>
+ </section>
+
+ <section className="home-section">
+  <div className="section-line"><div><span className="micro-label">REPRENDRE</span><h2>Continuer où tu en étais</h2></div><button onClick={()=>nav("course")}>Tout voir</button></div>
+  <div className="continue-grid">{courses.slice(0,3).map((c,i)=><button className="continue-card" key={c.id} onClick={()=>open(c)}><div className={"continue-visual cv-"+palette[i%palette.length]}><span>{i===0?"01":i===1?"02":"03"}</span><b>{visuals[i%visuals.length]==="cells"?"🧬":visuals[i%visuals.length]==="books"?"📚":"📘"}</b></div><div className="continue-main"><b>{c.title}</b><small>{c.pages.length} pages • {cards.filter(x=>x.courseId===c.id).length} cartes</small><div className="row-progress"><span style={{width:progressFor(c)+"%"}}/></div></div><ChevronRight size={18}/></button>)}</div>
+ </section>
+
+ <section className="quick-actions premium-actions"><button onClick={()=>nav("review")}><span className="action-icon ai-yellow"><Brain size={19}/></span><b>Réviser</b><small>{due} cartes prêtes</small></button><button onClick={()=>nav("qcm")}><span className="action-icon ai-lav"><ListChecks size={19}/></span><b>Quiz</b><small>30 questions</small></button><button onClick={()=>nav("cards")}><span className="action-icon ai-mint"><Target size={19}/></span><b>Mes cartes</b><small>{cards.length} cartes</small></button><button onClick={()=>nav("ai")}><span className="action-icon ai-coral"><Sparkles size={19}/></span><b>RMed IA</b><small>Explique-moi</small></button></section>
  </div>}function Stat({n,t}){return <div className="stat"><strong>{n}</strong><span>{t}</span></div>}
 
 function Course({course,pageNumber,setPageNumber,pdfDoc,pdfNativeUrl,pdfLoading,pdfError,zoom,setZoom,sel,onSelection,openCreator,selection,onCreateCard,onHighlightSelection,onEraseHighlight,onExplainSelection,toolColor,setToolColor,highlights,focusHighlightId,clearFocus,importPdf,courses,folders,activeFolderId,setActiveFolderId,onCreateFolder,open,openUpload,onAskAI,onReviewCourse,onReviewFolder,onMoveCourse,onMoveCourseId}){
