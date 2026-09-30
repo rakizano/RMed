@@ -950,3 +950,24 @@
  .title-actions{gap:6px}
  .secondary-action,.review-folder-action{font-size:10px;padding:0 8px}
 }
+
+/* Keep the flashcard action immediately reachable after selecting text. */
+.selection-bar{
+  position:sticky;
+  bottom:0;
+  margin:0;
+  box-shadow:0 -8px 24px #2d334215;
+  border-radius:10px 10px 0 0;
+}
+.note-create-card{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  background:#efedff;
+  color:#5f55df;
+  border-radius:8px;
+  padding:7px 9px;
+  font-size:11px;
+  font-weight:800;
+}
+.note-create-card:active{transform:scale(.98)}
