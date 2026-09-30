@@ -534,21 +534,13 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,c
     contextRef.current=text.items.map(i=>i.str).join(" ");
     const layer=textRef.current;if(!layer)return;
     layer.innerHTML="";
-    for(const item of text.items){
-     if(!item.str)continue;
-     const span=document.createElement("span");
-     const tx=pdfjsLib.Util.transform(viewport.transform,item.transform);
-     const fontHeight=Math.hypot(tx[2],tx[3]);
-     const angle=Math.atan2(tx[1],tx[0]);
-     span.textContent=item.str;
-     span.className="pdf-word";
-     span.style.left=tx[4]+"px";
-     span.style.top=(tx[5]-fontHeight)+"px";
-     span.style.fontSize=fontHeight+"px";
-     span.style.fontFamily=item.fontName||"sans-serif";
-     span.style.transform="rotate("+angle+"rad)";
-     layer.appendChild(span);
-    }
+    layer.classList.add("textLayer");
+    layer.style.setProperty("--scale-factor",viewport.scale);
+    const textDivs=[];
+    const textTask=pdfjsLib.renderTextLayer({textContentSource:text,container:layer,viewport,textDivs});
+    await textTask.promise;
+    if(cancelled)return;
+    layer.querySelectorAll("span").forEach(span=>span.classList.add("pdf-word"));
     requestAnimationFrame(()=>{
      if(focusHighlightId){
       const el=document.getElementById("hl-"+focusHighlightId);
