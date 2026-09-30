@@ -1,6 +1,6 @@
 import React,{useEffect,useMemo,useRef,useState}from"react";
 import{createRoot}from"react-dom/client";
-import{BookOpen,Brain,ChevronLeft,ChevronRight,Clock3,FileText,Folder,FolderPlus,History,Home as HomeIcon,ListChecks,Minus,Plus,Search,Sparkles,Target,Trash2,Upload,X,Highlighter,ExternalLink,ArrowLeft,MousePointer2,Hand}from"lucide-react";
+import{BookOpen,Brain,ChevronLeft,ChevronRight,Clock3,FileText,Folder,FolderPlus,History,Home as HomeIcon,ListChecks,Minus,Plus,Search,Sparkles,Target,Trash2,Upload,X,Highlighter,ExternalLink,ArrowLeft,MousePointer2,Hand,Eraser}from"lucide-react";
 import pdfWorkerUrl from"pdfjs-dist/build/pdf.worker.min.js?url";
 import"./styles.css";
 
@@ -512,7 +512,7 @@ function App(){
    <header><b className="mobile">RMed</b><div className="search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher…"/></div><div className="avatar">R</div></header>
 
    {tab==="home"&&<Home cards={cards} due={due.length} courses={courses} nav={nav} open={open}/>}
-   {tab==="course"&&<Course openUpload={()=>setUploadOpen(true)} course={course} pageNumber={pageNumber} setPageNumber={setPageNumber} pdfDoc={pdfDoc} pdfNativeUrl={pdfNativeUrl} pdfLoading={pdfLoading} pdfError={pdfError} zoom={zoom} setZoom={setZoom} sel={sel} onSelection={onSelection} openCreator={openCreator} selection={sel} onCreateCard={openCreator} onHighlightSelection={handleHighlightSelection} onExplainSelection={handleExplainSelection} toolColor={highlightColor} setToolColor={setHighlightColor} highlights={highlights.filter(h=>h.courseId===course.id&&h.page===pageNumber)} focusHighlightId={focusHighlightId} clearFocus={()=>setFocusHighlightId(null)} importPdf={file=>addPdf(file,activeFolderId)} courses={courses} folders={folders} activeFolderId={activeFolderId} setActiveFolderId={setActiveFolderId} onCreateFolder={createFolder} open={open} onAskAI={()=>setAiOpen(true)} onReviewCourse={()=>navReview("course",course.id)} onReviewFolder={()=>activeFolderId&&navReview("folder",activeFolderId)} onMoveCourse={()=>setMoveCourseId(course.id)} onMoveCourseId={(id,folderId)=>folderId?moveCourseToFolder(id,folderId):setMoveCourseId(id)}/>}
+   {tab==="course"&&<Course openUpload={()=>setUploadOpen(true)} course={course} pageNumber={pageNumber} setPageNumber={setPageNumber} pdfDoc={pdfDoc} pdfNativeUrl={pdfNativeUrl} pdfLoading={pdfLoading} pdfError={pdfError} zoom={zoom} setZoom={setZoom} sel={sel} onSelection={onSelection} openCreator={openCreator} selection={sel} onCreateCard={openCreator} onHighlightSelection={handleHighlightSelection} onEraseHighlight={eraseHighlight} onExplainSelection={handleExplainSelection} toolColor={highlightColor} setToolColor={setHighlightColor} highlights={highlights.filter(h=>h.courseId===course.id&&h.page===pageNumber)} focusHighlightId={focusHighlightId} clearFocus={()=>setFocusHighlightId(null)} importPdf={file=>addPdf(file,activeFolderId)} courses={courses} folders={folders} activeFolderId={activeFolderId} setActiveFolderId={setActiveFolderId} onCreateFolder={createFolder} open={open} onAskAI={()=>setAiOpen(true)} onReviewCourse={()=>navReview("course",course.id)} onReviewFolder={()=>activeFolderId&&navReview("folder",activeFolderId)} onMoveCourse={()=>setMoveCourseId(course.id)} onMoveCourseId={(id,folderId)=>folderId?moveCourseToFolder(id,folderId):setMoveCourseId(id)}/>}
    {tab==="cards"&&<Cards cards={cards} search={search} open={openCardSource} del={deleteCard} edit={editCard} courses={courses} folders={folders} onReviewCourse={id=>navReview("course",id)}/>}
    {tab==="review"&&<Review rc={rc} revealed={revealed} setRevealed={setRevealed} rate={rate} total={due.length} i={ri} courses={courses} folders={folders} course={course} activeFolderId={activeFolderId} scope={reviewScope} setScope={s=>{setReviewScope(s);setRi(0);setRevealed(false)}} onReviewAll={()=>navReview("all",null)}/>} 
    {tab==="qcm"&&<QCM courses={courses} course={course} cards={cards} qcm={qcm} setQcm={setQcm}/>}
@@ -532,7 +532,7 @@ function Nav({icon,t,a,f}){return <button className={a?"nav active":"nav"} onCli
 function Home({cards,due,courses,nav,open}){return <div className="page"><section className="hero"><div><small>TON ESPACE DE RÉVISION</small><h1>Travaille ton cours au moment où tu le lis.</h1><p>Surligne → crée ta flashcard → garde le lien vers le passage exact → révise.</p><button className="primary" onClick={()=>nav("course")}>Ouvrir un cours <ChevronRight/></button></div><div className="bigdog">🐶</div></section><div className="stats"><Stat n={courses.length} t="Cours"/><Stat n={cards.length} t="Flashcards"/><Stat n={due} t="À réviser"/><Stat n={cards.filter(c=>c.level==="perfect"||c.level==="good").length} t="Bien acquis"/></div><div className="grid"><section className="panel"><h3>Continuer</h3>{courses.map(c=><button className="course" key={c.id} onClick={()=>open(c)}><FileText/><div><b>{c.title}</b><small>{c.pages.length} page(s){c.kind==="pdf"?" • PDF réel":""}</small></div><ChevronRight/></button>)}</section><section className="panel"><h3>Actions rapides</h3><div className="quick"><button onClick={()=>nav("review")}><Brain/>Réviser</button><button onClick={()=>nav("qcm")}><ListChecks/>Faire un QCM</button><button onClick={()=>nav("cards")}><Target/>Mes flashcards</button></div></section></div></div>}
 function Stat({n,t}){return <div className="stat"><strong>{n}</strong><span>{t}</span></div>}
 
-function Course({course,pageNumber,setPageNumber,pdfDoc,pdfNativeUrl,pdfLoading,pdfError,zoom,setZoom,sel,onSelection,openCreator,selection,onCreateCard,onHighlightSelection,onExplainSelection,toolColor,setToolColor,highlights,focusHighlightId,clearFocus,importPdf,courses,folders,activeFolderId,setActiveFolderId,onCreateFolder,open,openUpload,onAskAI,onReviewCourse,onReviewFolder,onMoveCourse,onMoveCourseId}){
+function Course({course,pageNumber,setPageNumber,pdfDoc,pdfNativeUrl,pdfLoading,pdfError,zoom,setZoom,sel,onSelection,openCreator,selection,onCreateCard,onHighlightSelection,onEraseHighlight,onExplainSelection,toolColor,setToolColor,highlights,focusHighlightId,clearFocus,importPdf,courses,folders,activeFolderId,setActiveFolderId,onCreateFolder,open,openUpload,onAskAI,onReviewCourse,onReviewFolder,onMoveCourse,onMoveCourseId}){
  const pg=course.pages.find(x=>x.n===pageNumber)||course.pages[0];
  const prev=()=>setPageNumber(Math.max(1,pageNumber-1));
  const next=()=>setPageNumber(Math.min(course.pages.length,pageNumber+1));
@@ -618,7 +618,7 @@ function Course({course,pageNumber,setPageNumber,pdfDoc,pdfNativeUrl,pdfLoading,
     </div>
     {pdfLoading&&<div className="pdf-state">Ouverture du PDF…</div>}
     {pdfError&&<div className="pdf-state pdf-error"><b>Impossible d’ouvrir ce PDF</b><br/>{pdfError}<br/><button className="primary" onClick={openUpload}>Réimporter le PDF</button></div>}
-    {!pdfLoading&&!pdfError ? (course.kind==="pdf" ? (pdfNativeUrl&&isAppleMobile() ? <iframe className="native-pdf" title="PDF" src={pdfNativeUrl}/> : pdfDoc ? <PDFPage courseId={course.id} pdfDoc={pdfDoc} pageNumber={pageNumber} scale={zoom} highlights={highlights} selection={selection} focusHighlightId={focusHighlightId} clearFocus={clearFocus} onSelection={onSelection} onCreateCard={onCreateCard} onHighlightSelection={onHighlightSelection} onExplainSelection={onExplainSelection} toolColor={toolColor} setToolColor={setToolColor}/> : <div className="pdf-state">Préparation du PDF…</div>) : course.kind==="demo" ? <DemoPage pg={pg} onSelection={onSelection}/> : <div className="pdf-state">PDF indisponible. Réimporte-le pour continuer.</div>) : null}
+    {!pdfLoading&&!pdfError ? (course.kind==="pdf" ? (pdfNativeUrl&&isAppleMobile() ? <iframe className="native-pdf" title="PDF" src={pdfNativeUrl}/> : pdfDoc ? <PDFPage courseId={course.id} pdfDoc={pdfDoc} pageNumber={pageNumber} scale={zoom} highlights={highlights} selection={selection} focusHighlightId={focusHighlightId} clearFocus={clearFocus} onSelection={onSelection} onCreateCard={onCreateCard} onHighlightSelection={onHighlightSelection} onEraseHighlight={onEraseHighlight} onExplainSelection={onExplainSelection} toolColor={toolColor} setToolColor={setToolColor}/> : <div className="pdf-state">Préparation du PDF…</div>) : course.kind==="demo" ? <DemoPage pg={pg} onSelection={onSelection}/> : <div className="pdf-state">PDF indisponible. Réimporte-le pour continuer.</div>) : null}
    </section>
   </div>
  </div>
@@ -635,10 +635,12 @@ function DemoPage({pg,onSelection}){
  return <div className="demo-paper" ref={ref} onMouseUp={getSelection} onTouchEnd={getSelection}><small>PAGE {pg.n}</small><p>{pg.text}</p><p className="hint">Sélectionne un passage comme dans un vrai PDF pour créer une carte.</p></div>
 }
 
-function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,selection,focusHighlightId,clearFocus,onSelection,onCreateCard=()=>{},onHighlightSelection=()=>{},onExplainSelection=()=>{},toolColor,setToolColor}){
+function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,selection,focusHighlightId,clearFocus,onSelection,onCreateCard=()=>{},onHighlightSelection=()=>{},onEraseHighlight=()=>{},onExplainSelection=()=>{},toolColor,setToolColor}){
  const pageRef=useRef(null),canvasRef=useRef(null),textRef=useRef(null),contextRef=useRef("");
  const[height,setHeight]=useState(800);
  const[tool,setTool]=useState("select");
+ const[highlightBox,setHighlightBox]=useState(null);
+ const dragRef=useRef(null);
 
  useEffect(()=>{
   let cancelled=false;
@@ -667,6 +669,10 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,selection,focusHig
   render();return()=>{cancelled=true};
  },[pdfDoc,pageNumber,scale]);
 
+ function pagePoint(e){
+  const root=pageRef.current?.getBoundingClientRect();if(!root)return null;
+  return {x:e.clientX-root.left,y:e.clientY-root.top};
+ }
  function rects(range){
   const root=pageRef.current?.getBoundingClientRect();if(!root)return [];
   return [...range.getClientRects()].map(r=>({x:r.left-root.left,y:r.top-root.top,width:r.width,height:r.height})).filter(r=>r.width>1&&r.height>2);
@@ -678,139 +684,112 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,selection,focusHig
   const range=s.getRangeAt(0);
   return {text,rects:rects(range),context:contextRef.current,courseId,page:pageNumber};
  }
+ function collectHighlightPayload(box){
+  const root=pageRef.current?.getBoundingClientRect();if(!root||!textRef.current)return null;
+  const left=Math.min(box.x,box.x+box.width),top=Math.min(box.y,box.y+box.height);
+  const right=Math.max(box.x,box.x+box.width),bottom=Math.max(box.y,box.y+box.height);
+  const spans=[...textRef.current.querySelectorAll(".pdf-word")];
+  const hits=spans.map(span=>{
+    const r=span.getBoundingClientRect();
+    const sx=r.left-root.left,sy=r.top-root.top,sw=r.width,sh=r.height;
+    const overlapW=Math.max(0,Math.min(right,sx+sw)-Math.max(left,sx));
+    const overlapH=Math.max(0,Math.min(bottom,sy+sh)-Math.max(top,sy));
+    return {span,sx,sy,sw,sh,hit:overlapW>2&&overlapH>2};
+  }).filter(x=>x.hit);
+  if(!hits.length)return null;
+  const text=hits.map(x=>x.span.textContent||"").join(" ").replace(/\s+/g," ").trim();
+  if(!text)return null;
+  return {
+   text,
+   rects:hits.map(x=>({x:x.sx,y:x.sy,width:x.sw,height:x.sh})),
+   context:contextRef.current,
+   courseId,
+   page:pageNumber
+  };
+ }
  function publishSelection(autoHighlight=false){
   const payload=getPayload();if(!payload)return;
   onSelection(payload);
   if(autoHighlight)onHighlightSelection(payload);
  }
- function finishSelection(autoHighlight=false){
-  window.setTimeout(()=>publishSelection(autoHighlight),180);
+ function finishSelection(){
+  window.setTimeout(()=>publishSelection(false),120);
  }
  function setMode(next){
   setTool(next);
+  setHighlightBox(null);
+  dragRef.current=null;
   window.getSelection()?.removeAllRanges();
   onSelection?.(null);
  }
- useEffect(()=>{
-  const onSelectionChange=()=>{
-   if(tool!=="select"&&tool!=="highlight")return;
-   window.requestAnimationFrame(()=>{
-    const payload=getPayload();
-    if(payload)onSelection(payload);
-   });
-  };
-  document.addEventListener("selectionchange",onSelectionChange);
-  return()=>document.removeEventListener("selectionchange",onSelectionChange);
- },[tool,pageNumber,courseId]);
+ function onPointerDown(e){
+  if(tool!=="highlight")return;
+  if(e.target.closest?.(".document-tool-palette"))return;
+  const p=pagePoint(e);if(!p)return;
+  dragRef.current={pointerId:e.pointerId,start:p,current:p};
+  setHighlightBox({x:p.x,y:p.y,width:0,height:0});
+  try{e.currentTarget.setPointerCapture?.(e.pointerId)}catch{}
+  e.preventDefault();
+ }
+ function onPointerMove(e){
+  if(tool!=="highlight"||!dragRef.current)return;
+  const p=pagePoint(e);if(!p)return;
+  dragRef.current.current=p;
+  const s=dragRef.current.start;
+  setHighlightBox({x:s.x,y:s.y,width:p.x-s.x,height:p.y-s.y});
+  e.preventDefault();
+ }
+ function onPointerUp(e){
+  if(tool==="highlight"){
+   if(!dragRef.current)return;
+   const state=dragRef.current;
+   dragRef.current=null;
+   setHighlightBox(null);
+   const s=state.start,p=pagePoint(e)||state.current;
+   const box={x:s.x,y:s.y,width:p.x-s.x,height:p.y-s.y};
+   const payload=collectHighlightPayload(box);
+   if(payload){
+    onSelection(payload);
+    onHighlightSelection({...payload,color:toolColor||"#ffe66d99"});
+   }
+   try{e.currentTarget.releasePointerCapture?.(state.pointerId)}catch{}
+   e.preventDefault();
+   return;
+  }
+  if(tool==="select")finishSelection();
+ }
+ function onPointerCancel(e){
+  if(tool==="highlight"){dragRef.current=null;setHighlightBox(null);e.preventDefault();return}
+  if(tool==="select")finishSelection();
+ }
+
  const selected=selection?.courseId===courseId&&Number(selection.page)===Number(pageNumber)?selection:null;
 
- return <div className={"pdf-stage "+(tool==="select"?"tool-select":tool==="highlight"?"tool-highlight":"tool-hand")}
-   onPointerUp={e=>{if(tool==="select")finishSelection(false);else if(tool==="highlight")finishSelection(true)}}
-   onTouchEnd={()=>{if(tool==="select")finishSelection(false);else if(tool==="highlight")finishSelection(true)}}
-   onPointerCancel={()=>{if(tool!=="hand")finishSelection(tool==="highlight")}}>
+ return <div className={"pdf-stage "+(tool==="select"?"tool-select":tool==="highlight"?"tool-highlight":tool==="erase"?"tool-erase":"tool-hand")}
+   onPointerDown={onPointerDown}
+   onPointerMove={onPointerMove}
+   onPointerUp={onPointerUp}
+   onPointerCancel={onPointerCancel}
+   onTouchEnd={()=>{if(tool==="select")finishSelection()}}>
   <div className="document-tool-palette">
    <button className={tool==="select"?"chosen":""} onClick={()=>setMode("select")} title="Sélectionner du texte"><MousePointer2 size={19}/></button>
    <button className={tool==="hand"?"chosen":""} onClick={()=>setMode("hand")} title="Déplacer le document"><Hand size={19}/></button>
    <span className="palette-divider"/>
    <button className={"palette-highlighter "+(tool==="highlight"?"chosen":"")} onClick={()=>setMode("highlight")} title="Surligner"><Highlighter size={18}/></button>
+   <button className={tool==="erase"?"chosen":""} onClick={()=>setMode("erase")} title="Gommer un surlignage"><Eraser size={18}/></button>
    <div className="palette-colors">
-    {["#ffe66d99","#ffd6a599","#c8f7b899","#cbd7ff99","#e9d0ff99"].map(c=><button key={c} className={toolColor===c?"color chosen-color":"color"} style={{background:c.replace("99","")}} onClick={()=>{setTool("highlight");setToolColor?.(c)}} aria-label="Couleur de surlignage"/>)}
+    {["#ffe66d99","#ffd6a599","#c8f7b899","#cbd7ff99","#e9d0ff99"].map(c=><button key={c} className={toolColor===c?"color chosen-color":"color"} style={{background:c.replace("99","")}} onClick={()=>{setTool("highlight");setHighlightBox(null);setToolColor?.(c);window.getSelection()?.removeAllRanges();onSelection?.(null)}} aria-label="Couleur de surlignage"/>)}
    </div>
   </div>
+  {highlightBox&&<div className="highlight-selection-box" style={{left:Math.min(highlightBox.x,highlightBox.x+highlightBox.width),top:Math.min(highlightBox.y,highlightBox.y+highlightBox.height),width:Math.abs(highlightBox.width),height:Math.abs(highlightBox.height)}}/>}
   <div className="pdf-page" ref={pageRef} style={{height}}>
    <canvas ref={canvasRef}/>
-   <div className="pdf-highlights">{highlights.map(h=><div key={h.id} id={"hl-"+h.id} className="highlight-group">{(h.rects||[]).map((r,i)=><span key={i} style={{left:r.x,top:r.y,width:r.width,height:r.height,background:h.color||"#ffe66d99"}}/> )}</div>)}</div>
+   <div className="pdf-highlights">{highlights.map(h=><div key={h.id} id={"hl-"+h.id} className="highlight-group">{(h.rects||[]).map((r,i)=><span key={i} onPointerDown={e=>{if(tool==="erase"){e.preventDefault();e.stopPropagation();onEraseHighlight(h.id)}}} onClick={e=>{if(tool==="erase"){e.preventDefault();e.stopPropagation();onEraseHighlight(h.id)}}} style={{left:r.x,top:r.y,width:r.width,height:r.height,background:h.color||"#ffe66d99"}}/> )}</div>)}</div>
    <div className="pdf-text" ref={textRef}/>
-   {selected&&<SelectionBar sel={selected} onCreate={()=>onCreateCard(selected)} onHighlight={()=>onHighlightSelection(selected)} onExplain={()=>onExplainSelection(selected)}/>}
+   {selected&&<SelectionBar sel={selected} onCreate={()=>onCreateCard(selected)} onHighlight={()=>onHighlightSelection({...selected,color:toolColor||"#ffe66d99"})} onExplain={()=>onExplainSelection(selected)}/>}
   </div>
  </div>
 }
-function ExternalPdfReader({courseId,initialPage=1}){
- const[courses]=useState(()=>load("rmed_courses",[demo]));
- const course=courses.find(c=>c.id===courseId);
- const[pageNumber,setPageNumber]=useState(Math.max(1,initialPage));
- const[pdfDoc,setPdfDoc]=useState(null);
- const[loading,setLoading]=useState(true);
- const[error,setError]=useState("");
- const[zoom,setZoom]=useState(1.25);
- const[highlights,setHighlights]=useState(()=>load("rmed_highlights",[]));
- const[sel,setSel]=useState(null);
-
- useEffect(()=>save("rmed_highlights",highlights),[highlights]);
-
- useEffect(()=>{
-  let cancelled=false;
-  async function open(){
-   if(!course){setError("Cours introuvable.");setLoading(false);return}
-   try{
-    const data=await getPdf(course.id);
-    if(!data)throw new Error("PDF introuvable dans le stockage de cet appareil.");
-    const doc=await openPdfDocument(data);
-    if(cancelled)return;
-    setPdfDoc(doc);
-    if(!course.pages?.length){
-      const pages=Array.from({length:doc.numPages},(_,i)=>({id:course.id+"-p"+(i+1),n:i+1}));
-      const updatedCourses=courses.map(c=>c.id===course.id?{...c,pages}:c);
-      save("rmed_courses",updatedCourses);
-    }
-    setPageNumber(p=>Math.min(Math.max(1,p),doc.numPages));
-   }catch(err){
-    if(!cancelled)setError(err?.message||"Impossible d’ouvrir le PDF.");
-   }finally{
-    if(!cancelled)setLoading(false);
-   }
-  }
-  open();
-  return()=>{cancelled=true};
- },[course?.id]);
-
- useEffect(()=>{
-  const bc=typeof BroadcastChannel!=="undefined"?new BroadcastChannel("rmed-highlights"):null;
-  const onStorage=e=>{if(e.key==="rmed_highlights"&&e.newValue){try{setHighlights(JSON.parse(e.newValue))}catch{}}};
-  window.addEventListener("storage",onStorage);
-  return()=>{window.removeEventListener("storage",onStorage);bc?.close()};
- },[]);
-
- function addExternalHighlight(selection){
-  if(!selection?.text||!course)return;
-  const pg=course.pages.find(x=>x.n===pageNumber)||{id:course.id+"-p"+pageNumber,n:pageNumber};
-  const existing=highlights.find(h=>h.courseId===course.id&&h.pageId===pg.id&&h.text===selection.text);
-  if(existing){setSel({...selection,highlightId:existing.id});return}
-  const h={id:uid(),courseId:course.id,pageId:pg.id,page:pageNumber,text:selection.text,rects:selection.rects||[],context:selection.context||selection.text,color:selection.color||"#ffe66d99",created:Date.now()};
-  setHighlights(x=>[...x,h]);
-  setSel({...selection,highlightId:h.id});
-  try{new BroadcastChannel("rmed-highlights").postMessage(h)}catch{}
- }
-
- if(!course)return <div className="external-reader"><div className="external-reader-state">Cours introuvable.</div></div>;
-
- return <div className="external-reader">
-  <div className="external-reader-toolbar">
-   <button onClick={()=>window.close()} title="Fermer le lecteur"><ArrowLeft size={18}/><span>RMed</span></button>
-   <div className="external-reader-title"><b>{course.title}</b><span>Page {pageNumber} / {pdfDoc?.numPages||course.pages.length||"…"}</span></div>
-   <div className="external-reader-actions">
-    <button onClick={()=>setPageNumber(p=>Math.max(1,p-1))} disabled={pageNumber<=1}><ChevronLeft/></button>
-    <button onClick={()=>setPageNumber(p=>Math.min(pdfDoc?.numPages||course.pages.length,p+1))} disabled={pageNumber>=(pdfDoc?.numPages||course.pages.length)}><ChevronRight/></button>
-    <button onClick={()=>setZoom(z=>Math.max(.75,z-.1))}><Minus/></button>
-    <span>{Math.round(zoom*100)}%</span>
-    <button onClick={()=>setZoom(z=>Math.min(3,z+.1))}><Plus/></button>
-    
-   </div>
-  </div>
-  {loading&&<div className="external-reader-state">Ouverture du PDF…</div>}
-  {error&&<div className="external-reader-state"><b>Impossible d’ouvrir le PDF</b><p>{error}</p></div>}
-  {!loading&&!error&&pdfDoc&&<div className="external-reader-viewport">
-    <div className="external-reader-page-wrap">
-      <PDFPage courseId={course.id} pdfDoc={pdfDoc} pageNumber={pageNumber} scale={zoom} highlights={highlights.filter(h=>h.courseId===course.id&&h.page===pageNumber)} focusHighlightId={null} clearFocus={()=>{}} onSelection={addExternalHighlight}/>
-    </div>
-  </div>}
-  {sel&&<div className="external-selection">
-    <div><Highlighter size={15}/><span>« {sel.text} »</span></div>
-    <button onClick={()=>setSel(null)}>OK</button>
-   </div>}
- </div>
-}
-
 function SelectionBar({sel,onCreate,onHighlight,onExplain}){
  const anchor=sel?.rects?.length?sel.rects[sel.rects.length-1]:{x:24,y:40,width:0,height:0};
  return <div className="selection-popover" style={{left:Math.max(12,anchor.x),top:Math.max(8,anchor.y+anchor.height+8)}}>
@@ -1031,6 +1010,68 @@ function MoveCourseModal({course,folders,onMove,onClose}){
   </div>
  </div>
 }
+function AIChat({courses,course,selection,embedded=false}){
+ const[messages,setMessages]=useState([{role:"assistant",content:"Salut 👋 Je suis RMed. Pose-moi une question sur ton cours et je te l’explique avec des mots simples, sans perdre le niveau PASS."}]);
+ const[input,setInput]=useState("");
+ const[busy,setBusy]=useState(false);
+ const[error,setError]=useState("");
+
+ async function send(question){
+  const q=String(question||input||"").trim();
+  if(!q||busy)return;
+  setInput("");
+  setError("");
+  setMessages(prev=>[...prev,{role:"user",content:q}]);
+  setBusy(true);
+  try{
+   const resource=await retrieveResourceContext(courses,{courseId:course?.id||null,query:q,limit:14000,maxChunks:12});
+   const selectedContext=selection?.text?("PASSAGE SÉLECTIONNÉ :\n"+selection.text+"\n\n"+(selection.context||"")):"";
+   const context=[selectedContext,resource].filter(Boolean).join("\n\n");
+   const data=await callRMedAI({action:"chat",text:q,context});
+   setMessages(prev=>[...prev,{role:"assistant",content:data?.answer||"Je n’ai pas réussi à répondre."}]);
+  }catch(err){
+   setError(err?.message||"Impossible de contacter RMed IA.");
+  }finally{setBusy(false)}
+ }
+ const quick=selection?.text?[
+  ["✨","Explique mon passage",()=>send("Explique-moi simplement ce passage : "+selection.text)],
+  ["🧠","Piège PASS",()=>send("Donne-moi le piège PASS principal à éviter sur ce passage : "+selection.text)],
+  ["📝","Flashcard",()=>send("Transforme ce passage en une question de flashcard avec sa réponse : "+selection.text)]
+ ]:[
+  ["📚","Résumé du cours",()=>send("Fais-moi un résumé structuré des notions principales de ce cours, uniquement à partir des ressources disponibles.")],
+  ["🧠","Notions difficiles",()=>send("Quelles sont les notions les plus importantes à comprendre dans ce cours ? Explique-les simplement.")],
+  ["⚠️","Pièges PASS",()=>send("Quels pièges de QCM PASS faut-il retenir dans ce cours, uniquement à partir des ressources disponibles ?")]
+ ];
+ return <div className={embedded?"ai-chat-embedded":"page ai-page"}>
+  <div className="ai-chat-shell">
+   <div className="ai-chat-header">
+    <div className="ai-avatar">🐶</div>
+    <div><small className="eyebrow">ASSISTANT RMed</small><h1>Assistant IA</h1><p>{course?.title?course.title:"Ta bibliothèque"} • réponses guidées par tes cours</p></div>
+   </div>
+   <div className="ai-quick-actions">{quick.map(([icon,label,fn])=><button key={label} onClick={fn} disabled={busy}>{icon} {label}</button>)}</div>
+   {selection?.text&&<div className="ai-mode-hint"><b>Passage sélectionné</b><span>Les prochaines réponses peuvent partir directement de ce passage.</span></div>}
+   <div className="ai-chat-messages">
+    {messages.map((msg,i)=><div className={"ai-bubble-wrap "+msg.role} key={i}><div className={"ai-bubble "+msg.role}>{msg.content}</div></div>)}
+    {busy&&<div className="ai-bubble-wrap assistant"><div className="ai-bubble assistant typing">RMed réfléchit…</div></div>}
+   </div>
+   {error&&<div className="ai-chat-error">{error}</div>}
+   <form className="ai-chat-compose" onSubmit={e=>{e.preventDefault();send()}}>
+    <textarea value={input} onChange={e=>setInput(e.target.value)} placeholder="Pose une question sur ton cours…" rows={2} disabled={busy}/>
+    <button className="primary" type="submit" disabled={busy||!input.trim()}>Envoyer</button>
+   </form>
+  </div>
+ </div>
+}
+
+function AIAssistant({selection,courses,course,onClose}){
+ return <div className="overlay" onClick={e=>{if(e.target===e.currentTarget)onClose()}}>
+  <div className="modal ai-assistant-modal">
+   <div className="mh"><div><small className="eyebrow">RMed IA</small><h2>Assistant du cours</h2></div><button onClick={onClose}><X size={18}/></button></div>
+   <AIChat courses={courses} course={course} selection={selection} embedded/>
+  </div>
+ </div>
+}
+
 function HistoryPage({h}){
  return <div className="page"><div className="title"><div><small>PROGRESSION</small><h1>Historique</h1></div></div>
   {h.length?<div className="list">{h.map(x=><div className="history" key={x.id}><span>{x.level==="perfect"?"🔵":x.level==="good"?"🟢":"🟡"}</span><div><b>{x.card}</b><small>{new Date(x.date).toLocaleString("fr-FR")}</small></div></div>)}</div>:<div className="panel empty"><History size={35}/><p>Ton historique apparaîtra ici.</p></div>}
