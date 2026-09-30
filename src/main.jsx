@@ -714,9 +714,6 @@ function ExternalPdfReader({courseId,initialPage=1}){
  const[zoom,setZoom]=useState(1.25);
  const[highlights,setHighlights]=useState(()=>load("rmed_highlights",[]));
  const[sel,setSel]=useState(null);
- const[markColor,setMarkColor]=useState("#ffe66d99");
- const[markTool,setMarkTool]=useState("highlight");
- const[locked,setLocked]=useState(false);
 
  useEffect(()=>save("rmed_highlights",highlights),[highlights]);
 
