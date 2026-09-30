@@ -1244,3 +1244,81 @@
   .qcm-progress{margin-top:8px}
   .compact-card-modal,.explain-selection-modal,.modal{width:calc(100vw - 20px);max-width:none}
 }
+
+
+/* RMed reader tools — strict gesture separation */
+.pdf-stage.tool-hand{
+  touch-action:auto!important;
+  overflow:auto!important;
+  overscroll-behavior:auto!important;
+  cursor:grab;
+}
+.pdf-stage.tool-hand .pdf-text,
+.pdf-stage.tool-hand .pdf-word{
+  pointer-events:none!important;
+  -webkit-user-select:none!important;
+  user-select:none!important;
+}
+.pdf-stage.tool-select{
+  touch-action:auto!important;
+  overflow:auto!important;
+}
+.pdf-stage.tool-highlight{
+  touch-action:none!important;
+  overflow:hidden!important;
+  overscroll-behavior:none!important;
+  cursor:crosshair;
+}
+.pdf-stage.tool-highlight .pdf-text,
+.pdf-stage.tool-highlight .pdf-word{
+  pointer-events:auto!important;
+  -webkit-user-select:none!important;
+  user-select:none!important;
+}
+.pdf-stage.tool-erase{
+  touch-action:none!important;
+  overflow:hidden!important;
+  overscroll-behavior:none!important;
+  cursor:crosshair;
+}
+.pdf-stage.tool-erase .pdf-text,
+.pdf-stage.tool-erase .pdf-word{
+  pointer-events:none!important;
+  -webkit-user-select:none!important;
+  user-select:none!important;
+}
+.pdf-stage.tool-erase .pdf-highlights{
+  pointer-events:none!important;
+}
+.pdf-stage.tool-erase .pdf-highlights span{
+  pointer-events:auto!important;
+  cursor:pointer!important;
+}
+.highlight-selection-box{
+  position:absolute;
+  z-index:3;
+  border:2px dashed rgba(95,85,223,.7);
+  background:rgba(101,91,232,.10);
+  pointer-events:none!important;
+}
+.ai-chat-embedded{
+  min-width:0;
+}
+.ai-assistant-modal{
+  width:min(980px,94vw);
+  max-width:980px;
+  max-height:90vh;
+  overflow:auto;
+}
+.ai-assistant-modal .ai-chat-shell{
+  min-height:560px;
+}
+@media(max-width:700px){
+  .ai-assistant-modal{
+    width:calc(100vw - 20px);
+    max-height:94vh;
+  }
+  .ai-assistant-modal .ai-chat-shell{
+    min-height:0;
+  }
+}
