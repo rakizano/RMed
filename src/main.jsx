@@ -33,9 +33,10 @@ async function callRMedAI({action,text,context=""}){
  const endpoint=getAIEndpoint();
  if(!endpoint)throw new Error("IA non connectée : le backend RMed doit être configuré.");
  const controller=new AbortController();
- const timer=setTimeout(()=>controller.abort(),30000);
+ const timeoutMs=action==="qcm_session"?90000:45000;
+ const timer=setTimeout(()=>controller.abort(),timeoutMs);
  try{
-  const res=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"text/plain;charset=UTF-8"},signal:controller.signal,body:JSON.stringify({action,text:String(text||"").slice(0,12000),context:String(context||"").slice(0,16000)})});
+  const res=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"text/plain;charset=UTF-8"},signal:controller.signal,body:JSON.stringify({action,text:String(text||"").slice(0,12000),context:String(context||"").slice(0,30000)})});
   const data=await res.json().catch(()=>({}));
   if(!res.ok)throw new Error(data.error||"Le service IA a refusé la demande.");
   return data;
@@ -86,51 +87,141 @@ async function getPdf(id){
  }catch(err){console.warn("PDF storage unavailable",err);return null}
 }
 
-const resourceTextCache=new Map();
-async function getCourseResourceText(course){
- if(!course)return "";
- if(resourceTextCache.has(course.id))return resourceTextCache.get(course.id);
+const resourceChunkCache=new Map();
+
+function aiTokens(value){
+ return String(value||"")
+  .toLowerCase()
+  .normalize("NFD").replace(/[\\u0300-\\u036f]/g,"")
+  .replace(/[^a-z0-9'-]+/g," ")
+  .split(/\\s+/)
+  .filter(w=>w.length>2&&!/^(les|des|une|dans|avec|pour|sur|par|que|qui|est|sont|aux|plus|moins|cette|ces|son|ses|leur|leurs|entre|vers|comme|mais|donc|ainsi|elle|elles|ils|nous|vous|etre|avoir|faire|tres|aussi|puis)$/.test(w));
+}
+
+function splitResourceText(text,maxChars=1500,overlap=180){
+ const value=String(text||"").replace(/\\s+/g," ").trim();
+ if(!value)return [];
+ if(value.length<=maxChars)return [value];
+ const out=[];let start=0;
+ while(start<value.length&&out.length<80){
+  let end=Math.min(value.length,start+maxChars);
+  if(end<value.length){
+   const cut=value.lastIndexOf(". ",end);
+   if(cut>start+700)end=cut+1;
+  }
+  const piece=value.slice(start,end).trim();
+  if(piece)out.push(piece);
+  if(end>=value.length)break;
+  start=Math.max(start+1,end-overlap);
+ }
+ return out;
+}
+
+async function getCourseResourceChunks(course){
+ if(!course)return [];
+ if(resourceChunkCache.has(course.id))return resourceChunkCache.get(course.id);
+ const chunks=[];
  if(course.kind==="demo"){
-  const text=(course.pages||[]).map(p=>"Page "+p.n+": "+(p.text||"")).join("\n");
-  resourceTextCache.set(course.id,text);
-  return text;
+  for(const p of course.pages||[]){
+   const text=String(p.text||"").trim();
+   if(text)chunks.push({courseId:course.id,title:course.title,page:p.n,text});
+  }
+  resourceChunkCache.set(course.id,chunks);
+  return chunks;
  }
  try{
   const data=await getPdf(course.id);
-  if(!data)return "";
+  if(!data){resourceChunkCache.set(course.id,[]);return []}
   const doc=await openPdfDocument(data);
-  const chunks=[];
   for(let i=1;i<=doc.numPages;i++){
    const page=await doc.getPage(i);
-   const text=await page.getTextContent();
-   const pageText=text.items.map(x=>x.str||"").join(" ").replace(/\s+/g," ").trim();
-   if(pageText)chunks.push("Page "+i+": "+pageText);
+   const content=await page.getTextContent();
+   const pageText=content.items.map(x=>x.str||"").join(" ").replace(/\\s+/g," ").trim();
+   splitResourceText(pageText).forEach((text,index)=>chunks.push({courseId:course.id,title:course.title,page:i,chunk:index,text}));
   }
-  const joined=chunks.join("\n");
-  resourceTextCache.set(course.id,joined);
-  return joined;
+  resourceChunkCache.set(course.id,chunks);
+  return chunks;
  }catch(err){
   console.warn("RMed resource extraction error",err);
-  return "";
+  resourceChunkCache.set(course.id,[]);
+  return [];
  }
 }
-async function buildResourceContext(courses,{courseId=null,limit=15000}={}){
- const list=[...courses];
- const selected=courseId?list.find(c=>c.id===courseId):null;
- const ordered=selected?[selected,...list.filter(c=>c.id!==selected.id)]:list;
- if(!ordered.length)return "";
- const parts=[];
- let remaining=limit;
- for(let i=0;i<ordered.length&&remaining>200;i++){
-  const text=await getCourseResourceText(ordered[i]);
-  if(!text)continue;
-  const quota=selected&&i===0?Math.min(6500,remaining):Math.min(2800,remaining);
-  const clipped=text.slice(0,quota);
-  parts.push("=== COURS: "+ordered[i].title+" ===\n"+clipped);
-  remaining-=clipped.length;
+
+async function retrieveResourceContext(courses,{courseId=null,query="",limit=18000,maxChunks=14}={}){
+ const all=[];
+ for(const course of courses||[])all.push(...await getCourseResourceChunks(course));
+ if(!all.length)return "";
+ const q=String(query||"").trim();
+ const qTokens=[...new Set(aiTokens(q))];
+ const scored=all.map((chunk,index)=>{
+  const lower=chunk.text.toLowerCase();
+  const tokenHits=qTokens.reduce((sum,t)=>sum+(lower.includes(t)?1:0),0);
+  const exact=qTokens.filter(t=>t.length>5&&lower.includes(t)).length;
+  const phrase=q.length>10&&lower.includes(q.toLowerCase())?8:0;
+  const courseBoost=courseId&&chunk.courseId===courseId?5:0;
+  const titleBoost=q&&qTokens.some(t=>t.length>3&&chunk.title.toLowerCase().includes(t))?2:0;
+  return {...chunk,score:tokenHits*2+exact+phrase+courseBoost+titleBoost,index};
+ }).sort((a,b)=>b.score-a.score||a.page-b.page||a.index-b.index);
+ const selected=[];
+ const perCourse=new Map();
+ const perPage=new Map();
+ for(const chunk of scored){
+  if(selected.length>=maxChunks)break;
+  const courseCount=perCourse.get(chunk.courseId)||0;
+  const pageKey=chunk.courseId+"::"+chunk.page;
+  const pageCount=perPage.get(pageKey)||0;
+  if(courseCount>=5||pageCount>=2)continue;
+  selected.push(chunk);
+  perCourse.set(chunk.courseId,courseCount+1);
+  perPage.set(pageKey,pageCount+1);
  }
- return parts.join("\n\n").slice(0,limit);
+ if(q&&selected.length<Math.min(6,maxChunks)){
+  for(const chunk of all){
+   if(selected.some(x=>x.courseId===chunk.courseId&&x.page===chunk.page&&x.text===chunk.text))continue;
+   selected.push(chunk);
+   if(selected.length>=Math.min(6,maxChunks))break;
+  }
+ }
+ let remaining=limit;const parts=[];
+ for(const chunk of selected){
+  if(remaining<120)break;
+  const header="=== COURS: "+chunk.title+" — PAGE "+chunk.page+" ===\\n";
+  const body=chunk.text.slice(0,Math.max(200,remaining-header.length));
+  parts.push(header+body);
+  remaining-=header.length+body.length+2;
+ }
+ return parts.join("\\n\\n").slice(0,limit);
 }
+
+async function buildStudyContext(courses,{courseId=null,limit=30000,maxChunks=24}={}){
+ const all=[];
+ for(const course of courses||[])all.push(...await getCourseResourceChunks(course));
+ if(!all.length)return "";
+ const ordered=[...all].sort((a,b)=>{
+  const ac=courseId&&a.courseId===courseId?0:1;
+  const bc=courseId&&b.courseId===courseId?0:1;
+  return ac-bc||a.courseId.localeCompare(b.courseId)||a.page-b.page||((a.chunk||0)-(b.chunk||0));
+ });
+ const picks=[];const seenPages=new Set();
+ const addOne=(c)=>{
+  const key=c.courseId+"::"+c.page;
+  if(seenPages.has(key)||picks.length>=maxChunks)return false;
+  seenPages.add(key);picks.push(c);return true;
+ };
+ if(courseId)for(const c of ordered)if(c.courseId===courseId){addOne(c);if(picks.length>=maxChunks)break;}
+ for(let i=0;picks.length<maxChunks&&i<ordered.length;i++)addOne(ordered[i]);
+ let remaining=limit;const parts=[];
+ for(const c of picks){
+  if(remaining<120)break;
+  const header="=== COURS: "+c.title+" — PAGE "+c.page+" ===\\n";
+  const body=c.text.slice(0,Math.max(200,remaining-header.length));
+  parts.push(header+body);
+  remaining-=header.length+body.length+2;
+ }
+ return parts.join("\\n\\n").slice(0,limit);
+}
+
 async function deletePdf(id){
  const db=await dbPromise;if(!db)return;
  await new Promise((res,rej)=>{const tx=db.transaction("pdfs","readwrite");tx.objectStore("pdfs").delete(id);tx.oncomplete=res;tx.onerror=()=>rej(tx.error)});
@@ -387,14 +478,14 @@ function App(){
    {tab==="home"&&<Home cards={cards} due={due.length} courses={courses} nav={nav} open={open}/>}
    {tab==="course"&&<Course openUpload={()=>setUploadOpen(true)} course={course} pageNumber={pageNumber} setPageNumber={setPageNumber} pdfDoc={pdfDoc} pdfNativeUrl={pdfNativeUrl} pdfLoading={pdfLoading} pdfError={pdfError} zoom={zoom} setZoom={setZoom} sel={sel} suggestions={suggestions} onSelection={onSelection} openCreator={openCreator} applySuggestion={applySuggestion} pdfLocked={pdfLocked} setPdfLocked={setPdfLocked} highlights={highlights.filter(h=>h.courseId===course.id&&h.page===pageNumber)} focusHighlightId={focusHighlightId} clearFocus={()=>setFocusHighlightId(null)} importPdf={file=>addPdf(file,activeFolderId)} courses={courses} folders={folders} activeFolderId={activeFolderId} setActiveFolderId={setActiveFolderId} onCreateFolder={createFolder} open={open} onEraseHighlight={eraseHighlight} onAskAI={()=>setAiOpen(true)}/>}
    {tab==="cards"&&<Cards cards={cards} search={search} open={openCardSource} del={deleteCard} edit={editCard}/>}
-   {tab==="review"&&<Review rc={rc} revealed={revealed} setRevealed={setRevealed} rate={rate} total={due.length} i={ri}/>}
+   {tab==="review"&&<Review rc={rc} revealed={revealed} setRevealed={setRevealed} rate={rate} total={due.length} i={ri} courses={courses}/>} 
    {tab==="qcm"&&<QCM courses={courses} course={course} cards={cards} qcm={qcm} setQcm={setQcm}/>}
    {tab==="ai"&&<AIChat courses={courses} course={course} selection={sel}/>}
    {tab==="history"&&<HistoryPage h={history}/>}
   </main>
 
   {uploadOpen&&<UploadModal onClose={()=>setUploadOpen(false)} onFile={file=>addPdf(file,activeFolderId)}/>}
-  {aiOpen&&<AIAssistant selection={sel} onClose={()=>setAiOpen(false)}/>}
+  {aiOpen&&<AIAssistant selection={sel} courses={courses} course={course} onClose={()=>setAiOpen(false)}/>} 
   {modal&&<CardModal draft={draft} setDraft={setDraft} suggestions={suggestions} onUse={applySuggestion} onClose={()=>{setModal(false);setDraft(null)}} onSave={saveCard}/>}
  </div>
 }
@@ -1031,7 +1122,7 @@ function AIChat({courses,course,selection}){
   setMessages(x=>[...x,user]);
   setBusy(true);
   try{
-   const context=await buildResourceContext(courses,{courseId:scope==="course"?course?.id:null,limit:15000});
+   const context=await retrieveResourceContext(courses,{courseId:scope==="course"?course?.id:null,query:q,limit:18000,maxChunks:16});
    const conversation=messages.slice(-8).map(m=>(m.role==="user"?"Étudiant":"RMed")+": "+m.content).join("\n");
    const selectedText=selection?.text?"\n\nPASSAGE SÉLECTIONNÉ:\n"+selection.text:"";
    const data=await callRMedAI({
@@ -1080,7 +1171,7 @@ function AIChat({courses,course,selection}){
  </div>
 }
 
-function AIAssistant({selection,onClose}){
+function AIAssistant({selection,courses,course,onClose}){
  const[q,setQ]=useState("");
  const[answer,setAnswer]=useState("");
  const[busy,setBusy]=useState(false);
@@ -1089,7 +1180,8 @@ function AIAssistant({selection,onClose}){
   const question=q.trim()||"Explique-moi ce passage simplement, au niveau PASS, puis donne-moi les points à retenir.";
   setBusy(true);setAnswer("");setError("");
   try{
-   const data=await callRMedAI({action:"explain",text:selection?.text||"",context:(selection?.context||"")+"\n\nDemande : "+question});
+   const resource=await retrieveResourceContext(courses,{courseId:course?.id||null,query:(selection?.text||"")+" "+question,limit:10000,maxChunks:10});
+   const data=await callRMedAI({action:"explain",text:selection?.text||question,context:"RESSOURCES PERTINENTES :\n"+resource+"\n\nPASSAGE SÉLECTIONNÉ :\n"+(selection?.text||"")+"\n\nDEMANDE : "+question});
    setAnswer(data?.answer||"Réponse vide.");
   }catch(err){setError(err?.message||"Impossible de contacter l’IA.")}finally{setBusy(false)}
  }
@@ -1097,8 +1189,13 @@ function AIAssistant({selection,onClose}){
   <div className="modal ai-modal">
    <div className="mh"><div><small className="eyebrow">RMed IA</small><h2>Assistant du cours</h2></div><button onClick={onClose}><X size={18}/></button></div>
    <div className="ai-source"><small>PASSAGE SÉLECTIONNÉ</small><p>{selection?.text||"Aucun passage sélectionné."}</p></div>
-   <textarea rows="3" value={q} onChange={e=>setQ(e.target.value)} placeholder="Explique, résume, donne-moi un piège de QCM…"/>
-   <button className="primary" onClick={ask} disabled={busy}>{busy?"Réflexion…":"Demander à l’IA"}</button>
+   <div className="ai-mode-hint"><b>Mode compréhension</b><span>Je vais d’abord simplifier, puis revenir aux termes PASS.</span></div>
+   <textarea rows="3" value={q} onChange={e=>setQ(e.target.value)} placeholder="Explique, vulgarise, donne-moi un piège de QCM…"/>
+   <div className="ai-prompt-row">
+    <button onClick={()=>setQ("Je ne comprends rien. Repars de zéro avec des mots très simples, une analogie si utile, puis reviens au vocabulaire PASS.")}>🧠 Je bloque</button>
+    <button onClick={()=>setQ("Explique-moi autrement, avec d’autres mots que le cours, puis donne-moi l’idée à retenir.")}>🔄 Autrement</button>
+   </div>
+   <button className="primary" onClick={ask} disabled={busy}>{busy?"RMed réfléchit…":"Comprendre avec RMed"}</button>
    {error&&<div className="ai-error">{error}</div>}
    {answer&&<div className="ai-answer">{answer}</div>}
   </div>
@@ -1190,13 +1287,32 @@ function Cards({cards,search,open,del,edit}){
  </div>
 }
 
-function Review({rc,revealed,setRevealed,rate,total,i}){
+function Review({rc,revealed,setRevealed,rate,total,i,courses}){
+ const[help,setHelp]=useState("");
+ const[helpBusy,setHelpBusy]=useState(false);
+ const[helpError,setHelpError]=useState("");
+ async function explain(){
+  if(!rc||helpBusy)return;
+  setHelpBusy(true);setHelp("");setHelpError("");
+  try{
+   const resource=await retrieveResourceContext(courses,{courseId:rc.courseId,query:rc.front+" "+rc.back,limit:9000,maxChunks:9});
+   const data=await callRMedAI({
+    action:"explain_error",
+    text:"Je viens de voir cette flashcard. Explique-moi le concept sans simplement répéter la réponse.",
+    context:"FLASHCARD :\nQuestion : "+rc.front+"\nRéponse attendue : "+rc.back+"\n\nRESSOURCES PERTINENTES :\n"+resource+"\n\nDemande : explique le point de blocage probable, avec d’autres mots, une analogie si utile, puis reviens au vocabulaire PASS."
+   });
+   setHelp(data?.answer||"Je n’ai pas réussi à formuler l’explication.");
+  }catch(err){setHelpError(err?.message||"Impossible de contacter RMed IA.")}finally{setHelpBusy(false)}
+ }
  if(!rc)return <div className="page"><div className="panel empty"><Brain size={40}/><h2>Tout est à jour 🎉</h2><p>Aucune carte à réviser maintenant.</p></div></div>;
  return <div className="page review"><div className="title"><div><small>RÉVISION ACTIVE</small><h1>Réviser</h1></div><span className="pill">{Math.min(i+1,total)}/{total}</span></div>
-  <div className="reviewcard"><small>{rc.type==="cloze"?"TEXTE À TROUS":"QUESTION"}</small><h2>{rc.front}</h2>{revealed?<><div className="answer">{rc.back}</div><div className="levels">{levels.map(l=><button key={l[0]} onClick={()=>rate(l[0])}><span>{l[1]}</span><b>{l[2]}</b></button>)}</div></>:<button className="primary reveal" onClick={()=>setRevealed(true)}>Afficher la réponse</button>}</div>
+  <div className="reviewcard"><small>{rc.type==="cloze"?"TEXTE À TROUS":"QUESTION"}</small><h2>{rc.front}</h2>{revealed?<><div className="answer">{rc.back}</div>
+   <button className="ai-help-button" onClick={explain} disabled={helpBusy}>🧠 {helpBusy?"RMed explique…":"Je n’ai pas compris → explique-moi autrement"}</button>
+   {helpError&&<div className="ai-error">{helpError}</div>}
+   {help&&<div className="review-ai-help"><small>RMed t’aide à comprendre</small><div>{help}</div></div>}
+   <div className="levels">{levels.map(l=><button key={l[0]} onClick={()=>rate(l[0])}><span>{l[1]}</span><b>{l[2]}</b></button>)}</div></>:<button className="primary reveal" onClick={()=>setRevealed(true)}>Afficher la réponse</button>}</div>
  </div>
 }
-
 
 function QCM({courses,course,cards,qcm,setQcm}){
  const[scope,setScope]=useState("all");
@@ -1208,7 +1324,7 @@ function QCM({courses,course,cards,qcm,setQcm}){
   setLoading(true);setError("");
   try{
    const currentCourse=scope==="course"?course:null;
-   const context=await buildResourceContext(courses,{courseId:currentCourse?.id||null,limit:15000});
+   const context=await buildStudyContext(courses,{courseId:currentCourse?.id||null,limit:30000,maxChunks:24});
    if(!context.trim())throw new Error("Aucune ressource exploitable n’est disponible. Ajoute d’abord un cours ou un PDF.");
    const data=await callRMedAI({action:"qcm_session",text:"Génère exactement 30 questions de QCM PASS à partir uniquement des ressources ci-dessous.",context});
    if(!Array.isArray(data?.questions)||data.questions.length!==30)throw new Error("RMed n’a pas généré exactement 30 questions.");
@@ -1234,7 +1350,32 @@ function QCM({courses,course,cards,qcm,setQcm}){
  const current=session.questions[session.index];
  const answered=session.answered;
  const right=session.selected===current.answerIndex;
- return <div className="page"><div className="title"><div><small>QCM IA</small><h1>Entraînement</h1></div><span className="pill">{session.index+1}/30 • {session.score} point(s)</span></div><div className="qcm-progress"><div style={{width:((session.index+1)/30*100)+"%"}}/></div><div className="panel qcm qcm-session"><small>QUESTION {session.index+1}</small><h2>{current.question}</h2><div className="qcm-choices">{(current.choices||[]).slice(0,3).map((a,i)=><button key={i} className={answered?(i===current.answerIndex?"correct":i===session.selected?"wrong":""):""} disabled={answered} onClick={()=>choose(i)}>{String.fromCharCode(65+i)}. {a}</button>)}</div>{answered&&<div className={"qcm-correction "+(right?"good":"bad")}><b>{right?"✅ Bonne réponse":"❌ Pas tout à fait"}</b><span>{current.explanation||("Réponse correcte : "+current.choices[current.answerIndex])}</span>{!right&&<small>Réponse attendue : {String.fromCharCode(65+current.answerIndex)}. {current.choices[current.answerIndex]}</small>}<button className="primary" onClick={next}>{session.index===29?"Voir le résultat":"Question suivante"}</button></div>}</div></div>;
+ return <div className="page"><div className="title"><div><small>QCM IA</small><h1>Entraînement</h1></div><span className="pill">{session.index+1}/30 • {session.score} point(s)</span></div><div className="qcm-progress"><div style={{width:((session.index+1)/30*100)+"%"}}/></div><div className="panel qcm qcm-session"><small>QUESTION {session.index+1}</small><h2>{current.question}</h2><div className="qcm-choices">{(current.choices||[]).slice(0,3).map((a,i)=><button key={i} className={answered?(i===current.answerIndex?"correct":i===session.selected?"wrong":""):""} disabled={answered} onClick={()=>choose(i)}>{String.fromCharCode(65+i)}. {a}</button>)}</div>{answered&&<QCMCorrection current={current} selected={session.selected} right={right} next={next} final={session.index===29} courses={courses} courseId={scope==="course"?course?.id:null}/>} </div></div>;
+}
+
+function QCMCorrection({current,selected,right,next,final,courses,courseId}){
+ const[help,setHelp]=useState("");
+ const[busy,setBusy]=useState(false);
+ const[error,setError]=useState("");
+ async function explain(){
+  if(busy||right)return;
+  setBusy(true);setHelp("");setError("");
+  try{
+   const resource=await retrieveResourceContext(courses,{courseId,query:current.question+" "+current.choices.join(" "),limit:9000,maxChunks:9});
+   const data=await callRMedAI({
+    action:"explain_error",
+    text:"J’ai répondu "+String.fromCharCode(65+selected)+". Explique-moi précisément pourquoi cette réponse est incorrecte et comment raisonner la prochaine fois.",
+    context:"QUESTION :\n"+current.question+"\n\nMA RÉPONSE :\n"+current.choices[selected]+"\n\nBONNE RÉPONSE :\n"+current.choices[current.answerIndex]+"\n\nEXPLICATION INITIALE :\n"+(current.explanation||"")+"\n\nRESSOURCES PERTINENTES :\n"+resource
+   });
+   setHelp(data?.answer||"Je n’ai pas réussi à formuler l’explication.");
+  }catch(err){setError(err?.message||"Impossible de contacter RMed IA.")}finally{setBusy(false)}
+ }
+ return <div className={"qcm-correction "+(right?"good":"bad")}>
+  <b>{right?"✅ Bonne réponse":"❌ Pas tout à fait"}</b>
+  <span>{current.explanation||("Réponse correcte : "+current.choices[current.answerIndex])}</span>
+  {!right&&<><small>Réponse attendue : {String.fromCharCode(65+current.answerIndex)}. {current.choices[current.answerIndex]}</small><button className="ai-help-button" onClick={explain} disabled={busy}>🧠 {busy?"RMed explique…":"Comprendre mon erreur"}</button>{error&&<div className="ai-error">{error}</div>}{help&&<div className="review-ai-help"><small>Pourquoi ton raisonnement bloque</small><div>{help}</div></div>}</>}
+  <button className="primary" onClick={next}>{final?"Voir le résultat":"Question suivante"}</button>
+ </div>
 }
 
 function HistoryPage({h}){
