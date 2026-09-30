@@ -227,6 +227,30 @@ async function deletePdf(id){
  await new Promise((res,rej)=>{const tx=db.transaction("pdfs","readwrite");tx.objectStore("pdfs").delete(id);tx.oncomplete=res;tx.onerror=()=>rej(tx.error)});
 }
 
+function folderPath(folders,id){
+ const out=[];let cursor=folders.find(f=>f.id===id)||null;
+ while(cursor){out.unshift(cursor.name);cursor=folders.find(f=>f.id===cursor.parentId)||null;}
+ return out;
+}
+function descendantFolderIds(folders,id){
+ if(!id)return [];
+ const out=[id],queue=[id];
+ while(queue.length){
+  const parent=queue.shift();
+  for(const f of folders)if((f.parentId||null)===parent&&!out.includes(f.id)){out.push(f.id);queue.push(f.id);}
+ }
+ return out;
+}
+function scopedCards(cards,courses,folders,scope){
+ if(!scope||scope.type==="all")return cards;
+ if(scope.type==="course")return cards.filter(c=>c.courseId===scope.id);
+ const ids=descendantFolderIds(folders,scope.id);
+ return cards.filter(c=>{
+   const co=courses.find(x=>x.id===c.courseId);
+   return ids.includes(co?.folderId||null);
+ });
+}
+
 function Root(){
  const params=new URLSearchParams(window.location.search);
  const readerId=params.get("reader");
@@ -238,6 +262,10 @@ function App(){
  const[courses,setCourses]=useState(()=>load("rmed_courses",[demo]));
  const[folders,setFolders]=useState(()=>load("rmed_folders",[]));
  const[cards,setCards]=useState(()=>load("rmed_cards",[]));
+ const[reviewScope,setReviewScope]=useState({type:"all",id:null});
+ const[moveCourseId,setMoveCourseId]=useState(null);
+ const[batchCreated,setBatchCreated]=useState(null);
+ const[batchBusy,setBatchBusy]=useState(false);
  const[highlights,setHighlights]=useState(()=>load("rmed_highlights",[]));
  const[history,setHistory]=useState(()=>load("rmed_history",[]));
  const[tab,setTab]=useState("home");
@@ -270,7 +298,9 @@ function App(){
  useEffect(()=>save("rmed_highlights",highlights),[highlights]);
  useEffect(()=>save("rmed_history",history),[history]);
 
- const due=useMemo(()=>cards.filter(c=>!c.next||c.next<=Date.now()),[cards,history]);
+ const allDue=useMemo(()=>cards.filter(c=>!c.next||c.next<=Date.now()),[cards,history]);
+ const reviewPool=useMemo(()=>scopedCards(cards,courses,folders,reviewScope),[cards,courses,folders,reviewScope]);
+ const due=useMemo(()=>reviewPool.filter(c=>!c.next||c.next<=Date.now()),[reviewPool]);
  const rc=due[ri];
 
  async function loadPdf(c){
@@ -320,7 +350,38 @@ function App(){
    if(c.kind==="pdf")await loadPdf(c);else setPdfDoc(null);
  }
 
- function nav(t){setTab(t);if(t==="review"){setRi(0);setRevealed(false)}}
+ function nav(t){setTab(t);if(t==="review"){setReviewScope({type:"all",id:null});setRi(0);setRevealed(false)}}
+ function navReview(type="all",id=null){setReviewScope({type,id});setRi(0);setRevealed(false);setTab("review")}
+ function moveCurrentCourse(folderId){
+   if(!course?.id)return;
+   const target=folderId||null;
+   setCourses(x=>x.map(c=>c.id===course.id?{...c,folderId:target}:c));
+   setActiveFolderId(target);
+   setMoveCourseId(null);
+ }
+ async function createBatchFlashcards(targetCourse){
+   if(!targetCourse||batchBusy)return;
+   setBatchBusy(true);
+   try{
+    const context=await buildStudyContext([targetCourse],{courseId:targetCourse.id,limit:30000,maxChunks:24});
+    if(!context.trim())throw new Error("Aucun texte exploitable dans ce cours.");
+    const data=await callRMedAI({action:"flashcard_batch",text:"Crée exactement 8 flashcards de PASS à partir uniquement de ce cours. Varie les formulations et couvre les notions les plus importantes.",context});
+    if(!Array.isArray(data?.cards)||!data.cards.length)throw new Error("RMed n’a pas généré de flashcards.");
+    const now=Date.now();
+    const created=data.cards.slice(0,8).filter(c=>c?.front&&c?.back).map((c,i)=>{
+      const pageNumber=Number(c.page)||1;
+      const page=targetCourse.pages.find(p=>p.n===pageNumber)||targetCourse.pages[0];
+      return {
+       id:uid(),courseId:targetCourse.id,pageId:page?.id||null,page:page?.n||1,highlightId:null,
+       source:String(c.source|| (targetCourse.title+" — page "+(page?.n||1))),type:c.type||"basic",
+       front:String(c.front).trim(),back:String(c.back).trim(),level:null,next:now,created:now+i
+      };
+    });
+    setCards(x=>[...x,...created]);
+    setBatchCreated({course:targetCourse,cards:created});
+   }catch(err){alert(err?.message||"Impossible de créer les flashcards.");}
+   finally{setBatchBusy(false)}
+ }
 
  async function addPdf(file,folderId=activeFolderId){
    if(!file)return;
@@ -476,25 +537,27 @@ function App(){
    <header><b className="mobile">RMed</b><div className="search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher…"/></div><div className="avatar">R</div></header>
 
    {tab==="home"&&<Home cards={cards} due={due.length} courses={courses} nav={nav} open={open}/>}
-   {tab==="course"&&<Course openUpload={()=>setUploadOpen(true)} course={course} pageNumber={pageNumber} setPageNumber={setPageNumber} pdfDoc={pdfDoc} pdfNativeUrl={pdfNativeUrl} pdfLoading={pdfLoading} pdfError={pdfError} zoom={zoom} setZoom={setZoom} sel={sel} suggestions={suggestions} onSelection={onSelection} openCreator={openCreator} applySuggestion={applySuggestion} pdfLocked={pdfLocked} setPdfLocked={setPdfLocked} highlights={highlights.filter(h=>h.courseId===course.id&&h.page===pageNumber)} focusHighlightId={focusHighlightId} clearFocus={()=>setFocusHighlightId(null)} importPdf={file=>addPdf(file,activeFolderId)} courses={courses} folders={folders} activeFolderId={activeFolderId} setActiveFolderId={setActiveFolderId} onCreateFolder={createFolder} open={open} onEraseHighlight={eraseHighlight} onAskAI={()=>setAiOpen(true)}/>}
-   {tab==="cards"&&<Cards cards={cards} search={search} open={openCardSource} del={deleteCard} edit={editCard}/>}
-   {tab==="review"&&<Review rc={rc} revealed={revealed} setRevealed={setRevealed} rate={rate} total={due.length} i={ri} courses={courses}/>} 
+   {tab==="course"&&<Course openUpload={()=>setUploadOpen(true)} course={course} pageNumber={pageNumber} setPageNumber={setPageNumber} pdfDoc={pdfDoc} pdfNativeUrl={pdfNativeUrl} pdfLoading={pdfLoading} pdfError={pdfError} zoom={zoom} setZoom={setZoom} sel={sel} suggestions={suggestions} onSelection={onSelection} openCreator={openCreator} applySuggestion={applySuggestion} pdfLocked={pdfLocked} setPdfLocked={setPdfLocked} highlights={highlights.filter(h=>h.courseId===course.id&&h.page===pageNumber)} focusHighlightId={focusHighlightId} clearFocus={()=>setFocusHighlightId(null)} importPdf={file=>addPdf(file,activeFolderId)} courses={courses} folders={folders} activeFolderId={activeFolderId} setActiveFolderId={setActiveFolderId} onCreateFolder={createFolder} open={open} onEraseHighlight={eraseHighlight} onAskAI={()=>setAiOpen(true)} onReviewCourse={()=>navReview("course",course.id)} onReviewFolder={()=>activeFolderId&&navReview("folder",activeFolderId)} onMoveCourse={()=>setMoveCourseId(course.id)} onCreateBatch={()=>createBatchFlashcards(course)} batchBusy={batchBusy}/>}
+   {tab==="cards"&&<Cards cards={cards} search={search} open={openCardSource} del={deleteCard} edit={editCard} courses={courses} folders={folders} onReviewCourse={id=>navReview("course",id)}/>}
+   {tab==="review"&&<Review rc={rc} revealed={revealed} setRevealed={setRevealed} rate={rate} total={due.length} i={ri} courses={courses} folders={folders} course={course} activeFolderId={activeFolderId} scope={reviewScope} setScope={s=>{setReviewScope(s);setRi(0);setRevealed(false)}} onReviewAll={()=>navReview("all",null)}/>} 
    {tab==="qcm"&&<QCM courses={courses} course={course} cards={cards} qcm={qcm} setQcm={setQcm}/>}
    {tab==="ai"&&<AIChat courses={courses} course={course} selection={sel}/>}
    {tab==="history"&&<HistoryPage h={history}/>}
   </main>
 
   {uploadOpen&&<UploadModal onClose={()=>setUploadOpen(false)} onFile={file=>addPdf(file,activeFolderId)}/>}
+  {batchCreated&&<FlashcardBatchModal data={batchCreated} onClose={()=>setBatchCreated(null)} onOpenCards={()=>{setBatchCreated(null);nav("cards")}}/>}
+  {moveCourseId&&<MoveCourseModal course={courses.find(c=>c.id===moveCourseId)||course} folders={folders} onMove={moveCurrentCourse} onClose={()=>setMoveCourseId(null)}/>}
   {aiOpen&&<AIAssistant selection={sel} courses={courses} course={course} onClose={()=>setAiOpen(false)}/>} 
   {modal&&<CardModal draft={draft} setDraft={setDraft} suggestions={suggestions} onUse={applySuggestion} onClose={()=>{setModal(false);setDraft(null)}} onSave={saveCard}/>}
  </div>
 }
 
 function Nav({icon,t,a,f}){return <button className={a?"nav active":"nav"} onClick={f}>{icon}<span>{t}</span></button>}
-function Home({cards,due,courses,nav,open}){return <div className="page"><section className="hero"><div><small>TON ESPACE DE RÉVISION</small><h1>Travaille ton cours au moment où tu le lis.</h1><p>Surligne → crée ta flashcard → garde le lien vers le passage exact → révise.</p><button className="primary" onClick={()=>nav("course")}>Ouvrir un cours <ChevronRight/></button></div><div className="bigdog">🐶</div></section><div className="stats"><Stat n={courses.length} t="Cours"/><Stat n={cards.length} t="Flashcards"/><Stat n={due} t="À réviser"/><Stat n={cards.filter(c=>c.level==="perfect"||c.level==="good").length} t="Bien acquis"/></div><div className="grid"><section className="panel"><h3>Continuer</h3>{courses.map(c=><button className="course" key={c.id} onClick={()=>open(c)}><FileText/><div><b>{c.title}</b><small>{c.pages.length} page(s){c.kind==="pdf"?" • PDF réel":""}</small></div><ChevronRight/></button>)}</section><section className="panel"><h3>Actions rapides</h3><div className="quick"><button onClick={()=>nav("review")}><Brain/>Réviser</button><button onClick={()=>nav("qcm")}><ListChecks/>Faire un QCM</button><button onClick={()=>nav("cards")}><Target/>Mes flashcards</button></div></section></div></div>}
+function Home({cards,due,courses,nav,open}){return <div className="page"><section className="hero"><div><small>TON ESPACE DE RÉVISION</small><h1>Travaille ton cours au moment où tu le lis.</h1><p>Surligne → crée ta flashcard → garde le lien vers le passage exact → révise.</p><button className="primary" onClick={()=>nav("course")}>Ouvrir un cours <ChevronRight/></button></div><div className="bigdog">🐶</div></section><div className="stats"><Stat n={courses.length} t="Cours"/><Stat n={cards.length} t="Flashcards"/><Stat n={allDue.length} t="À réviser"/><Stat n={cards.filter(c=>c.level==="perfect"||c.level==="good").length} t="Bien acquis"/></div><div className="grid"><section className="panel"><h3>Continuer</h3>{courses.map(c=><button className="course" key={c.id} onClick={()=>open(c)}><FileText/><div><b>{c.title}</b><small>{c.pages.length} page(s){c.kind==="pdf"?" • PDF réel":""}</small></div><ChevronRight/></button>)}</section><section className="panel"><h3>Actions rapides</h3><div className="quick"><button onClick={()=>nav("review")}><Brain/>Réviser</button><button onClick={()=>nav("qcm")}><ListChecks/>Faire un QCM</button><button onClick={()=>nav("cards")}><Target/>Mes flashcards</button></div></section></div></div>}
 function Stat({n,t}){return <div className="stat"><strong>{n}</strong><span>{t}</span></div>}
 
-function Course({course,pageNumber,setPageNumber,pdfDoc,pdfNativeUrl,pdfLoading,pdfError,zoom,setZoom,sel,suggestions,onSelection,openCreator,applySuggestion,pdfLocked,setPdfLocked,highlights,focusHighlightId,clearFocus,importPdf,courses,folders,activeFolderId,setActiveFolderId,onCreateFolder,open,openUpload,onEraseHighlight,onAskAI}){
+function Course({course,pageNumber,setPageNumber,pdfDoc,pdfNativeUrl,pdfLoading,pdfError,zoom,setZoom,sel,suggestions,onSelection,openCreator,applySuggestion,pdfLocked,setPdfLocked,highlights,focusHighlightId,clearFocus,importPdf,courses,folders,activeFolderId,setActiveFolderId,onCreateFolder,open,openUpload,onEraseHighlight,onAskAI,onReviewCourse,onReviewFolder,onMoveCourse,onCreateBatch,batchBusy}){
  const pg=course.pages.find(x=>x.n===pageNumber)||course.pages[0];
  const[markColor,setMarkColor]=useState("#ffe66d99");
  const[markTool,setMarkTool]=useState("highlight");
@@ -520,7 +583,12 @@ function Course({course,pageNumber,setPageNumber,pdfDoc,pdfNativeUrl,pdfLoading,
   setActiveFolderId?.(id);
   setPageNumber(1);
  }
- return <div className="page"><div className="title"><div><small>LECTEUR DE COURS</small><h1>{course.title}</h1></div><button className="upload" onClick={()=>openUpload?.()}><Upload/>Importer un PDF</button></div>
+ return <div className="page"><div className="title"><div><small>LECTEUR DE COURS</small><h1>{course.title}</h1></div><div className="title-actions">
+ <button className="secondary-action" onClick={onMoveCourse} disabled={!course?.id}><Folder size={16}/> Ranger</button>
+ <button className="secondary-action" onClick={onReviewCourse} disabled={!course?.id}><Brain size={16}/> Réviser ce cours</button>
+ <button className="primary ai-create-course" onClick={onCreateBatch} disabled={batchBusy||!course?.id}><Sparkles size={16}/>{batchBusy?"Création…":"Créer 8 flashcards avec ce cours"}</button>
+ <button className="upload" onClick={()=>openUpload?.()}><Upload/>Importer un PDF</button>
+</div></div>
 
  <section className="library-browser panel">
   <div className="library-browser-head">
@@ -531,6 +599,7 @@ function Course({course,pageNumber,setPageNumber,pdfDoc,pdfNativeUrl,pdfLoading,
    <div className="library-browser-actions">
     {activeFolderId&&<button onClick={goRoot} title="Retourner à la racine"><ArrowLeft size={15}/> Racine</button>}
     <button onClick={createNamedFolder}><FolderPlus size={15}/> {activeFolderId?"Sous-dossier":"Nouveau dossier"}</button>
+{activeFolderId&&<button className="review-folder-action" onClick={onReviewFolder}><Brain size={15}/> Réviser ce dossier</button>}
     <button className="primary" onClick={()=>openUpload?.()}><Upload size={15}/> Ajouter un PDF</button>
    </div>
   </div>
@@ -555,11 +624,13 @@ function Course({course,pageNumber,setPageNumber,pdfDoc,pdfNativeUrl,pdfLoading,
   <div className="library-section">
    <div className="library-section-title"><FileText size={16}/> {visibleCourses.length?"Cours dans ce dossier":"Cours"}</div>
    {visibleCourses.length?<div className="course-grid">{visibleCourses.map(c=>
-    <button className={"course-file "+(c.id===course.id?"selected":"")} key={c.id} onClick={()=>open(c)}>
-      <div className="course-file-icon"><FileText/></div>
-      <div className="course-file-body"><b>{c.title}</b><small>{c.pages.length} page(s){c.kind==="pdf"?" • PDF":" • Démo"}</small></div>
-      <ChevronRight size={17}/>
-    </button>
+    <div className={"course-file "+(c.id===course.id?"selected":"")} key={c.id}>
+      <button className="course-file-main" onClick={()=>open(c)}>
+        <div className="course-file-icon"><FileText/></div>
+        <div className="course-file-body"><b>{c.title}</b><small>{c.pages.length} page(s){c.kind==="pdf"?" • PDF":" • Démo"}</small></div>
+        <ChevronRight size={17}/>
+      </button>
+    </div>
    )}</div>:<div className="library-empty">Aucun cours ici. Ajoute un PDF ou crée un dossier.</div>}
   </div>
  </section>
@@ -1271,10 +1342,17 @@ function CardModal({draft,setDraft,suggestions,onUse,onClose,onSave}){
  </div>
 }
 
-function Cards({cards,search,open,del,edit}){
+function Cards({cards,search,open,del,edit,courses,folders,onReviewCourse}){
  const filtered=cards.filter(c=>(c.front+" "+c.back+" "+(c.source||"")).toLowerCase().includes((search||"").toLowerCase()));
- return <div className="page"><div className="title"><div><small>MA BIBLIOTHÈQUE</small><h1>Mes flashcards</h1></div><span className="pill">{cards.length} carte(s)</span></div>
-  {filtered.length?<div className="cards-library">{filtered.map(c=><article className="flashcard-row" key={c.id}>
+ const visibleCourses=filtered.map(c=>courses.find(x=>x.id===c.courseId)).filter(Boolean);
+ const uniqueCourses=[...new Map(visibleCourses.map(c=>[c.id,c])).values()];
+ return <div className="page"><div className="title"><div><small>MA BIBLIOTHÈQUE</small><h1>Mes flashcards</h1><p className="library-subtitle">Chaque carte reste rattachée à son cours et à son dossier.</p></div><span className="pill">{filtered.length} carte(s)</span></div>
+  {filtered.length?<div className="cards-by-course">{uniqueCourses.map(co=>{
+    const courseCards=filtered.filter(c=>c.courseId===co.id);
+    const path=co.folderId?folderPath(folders,co.folderId).join(" / "):"Racine";
+    return <section className="cards-course-group" key={co.id}>
+      <div className="cards-course-head"><div><small>{path}</small><h3>{co.title}</h3></div><button onClick={()=>onReviewCourse?.(co.id)}><Brain size={15}/> Réviser ce cours</button></div>
+      <div className="cards-library">{courseCards.map(c=><article className="flashcard-row" key={c.id}>
     <div className="flashcard-type">{c.type==="cloze"?"🧩":c.type==="concept"?"💡":"❓"}</div>
     <div className="flashcard-content">
       <div className="flashcard-side"><small>RECTO</small><strong>{c.front}</strong></div>
@@ -1283,11 +1361,13 @@ function Cards({cards,search,open,del,edit}){
       <div className="flashcard-meta">Page {c.page} • {c.level||"À réviser"}</div>
     </div>
     <div className="flashcard-actions"><button onClick={()=>edit(c)}>Modifier</button><button onClick={()=>open(c)}>Source</button><button className="danger" onClick={()=>del(c.id)}><Trash2 size={16}/></button></div>
-  </article>)}</div>:<div className="panel empty"><Brain size={35}/><p>Aucune flashcard pour l’instant.</p></div>}
+      </article>)}</div>
+    </section>
+  })}</div>:<div className="panel empty"><Brain size={35}/><p>Aucune flashcard pour l’instant.</p><p>Ouvre un cours, sélectionne un passage et appuie sur « Créer la carte avec l’IA ».</p></div>}
  </div>
 }
 
-function Review({rc,revealed,setRevealed,rate,total,i,courses}){
+function Review({rc,revealed,setRevealed,rate,total,i,courses,folders,course,activeFolderId,scope,setScope,onReviewAll}){
  const[help,setHelp]=useState("");
  const[helpBusy,setHelpBusy]=useState(false);
  const[helpError,setHelpError]=useState("");
@@ -1304,8 +1384,15 @@ function Review({rc,revealed,setRevealed,rate,total,i,courses}){
    setHelp(data?.answer||"Je n’ai pas réussi à formuler l’explication.");
   }catch(err){setHelpError(err?.message||"Impossible de contacter RMed IA.")}finally{setHelpBusy(false)}
  }
- if(!rc)return <div className="page"><div className="panel empty"><Brain size={40}/><h2>Tout est à jour 🎉</h2><p>Aucune carte à réviser maintenant.</p></div></div>;
+ const currentFolder=folders.find(f=>f.id===activeFolderId);
+ const currentFolderName=currentFolder?.name||"Dossier actuel";
+ const currentCourseName=course?.title||"Cours actuel";
+ if(!rc)return <div className="page review"><div className="title"><div><small>RÉVISION ACTIVE</small><h1>Réviser</h1></div><span className="pill">0 carte</span></div><div className="panel empty"><div className="review-scope-bar"><b>Périmètre</b><button className={scope.type==="all"?"chosen":""} onClick={onReviewAll}>Toute la bibliothèque</button>{activeFolderId&&<button className={scope.type==="folder"?"chosen":""} onClick={()=>setScope({type:"folder",id:activeFolderId})}>{currentFolderName}</button>} {course?.id&&<button className={scope.type==="course"?"chosen":""} onClick={()=>setScope({type:"course",id:course.id})}>{currentCourseName}</button>}</div><Brain size={40}/><h2>Tout est à jour 🎉</h2><p>Aucune carte à réviser dans ce périmètre.</p></div></div>;
+ const currentFolder=folders.find(f=>f.id===activeFolderId);
+ const currentFolderName=currentFolder?.name||"Dossier actuel";
+ const currentCourseName=course?.title||"Cours actuel";
  return <div className="page review"><div className="title"><div><small>RÉVISION ACTIVE</small><h1>Réviser</h1></div><span className="pill">{Math.min(i+1,total)}/{total}</span></div>
+  <div className="review-scope-bar"><b>Périmètre</b><button className={scope.type==="all"?"chosen":""} onClick={onReviewAll}>Toute la bibliothèque</button>{activeFolderId&&<button className={scope.type==="folder"?"chosen":""} onClick={()=>setScope({type:"folder",id:activeFolderId})}>{currentFolderName}</button>} {course?.id&&<button className={scope.type==="course"?"chosen":""} onClick={()=>setScope({type:"course",id:course.id})}>{currentCourseName}</button>}</div>
   <div className="reviewcard"><small>{rc.type==="cloze"?"TEXTE À TROUS":"QUESTION"}</small><h2>{rc.front}</h2>{revealed?<><div className="answer">{rc.back}</div>
    <button className="ai-help-button" onClick={explain} disabled={helpBusy}>🧠 {helpBusy?"RMed explique…":"Je n’ai pas compris → explique-moi autrement"}</button>
    {helpError&&<div className="ai-error">{helpError}</div>}
@@ -1378,6 +1465,27 @@ function QCMCorrection({current,selected,right,next,final,courses,courseId}){
  </div>
 }
 
+function FlashcardBatchModal({data,onClose,onOpenCards}){
+ return <div className="overlay" onClick={e=>{if(e.target===e.currentTarget)onClose()}}>
+  <div className="modal batch-modal">
+   <div className="mh"><div><small className="eyebrow">FLASHCARDS CRÉÉES</small><h2>{data.cards.length} nouvelles cartes</h2><p className="library-subtitle">{data.course.title}</p></div><button onClick={onClose}><X size={18}/></button></div>
+   <div className="batch-list">{data.cards.map((c,i)=><article key={c.id}><span>{i+1}</span><div><b>{c.front}</b><p>{c.back}</p><small>Page {c.page}</small></div></article>)}</div>
+   <div className="actions"><button onClick={onClose}>Fermer</button><button className="primary" onClick={onOpenCards}>Voir mes flashcards</button></div>
+  </div>
+ </div>
+}
+function MoveCourseModal({course,folders,onMove,onClose}){
+ const[folderId,setFolderId]=useState(course?.folderId||"");
+ const options=[{id:"",label:"Racine — Tous les cours"},...folders.map(f=>({id:f.id,label:folderPath(folders,f.id).join(" / "))})); 
+ return <div className="overlay" onClick={e=>{if(e.target===e.currentTarget)onClose()}}>
+  <div className="modal move-modal">
+   <div className="mh"><div><small className="eyebrow">ORGANISATION</small><h2>Ranger « {course?.title} »</h2></div><button onClick={onClose}><X size={18}/></button></div>
+   <p>Choisis le dossier dans lequel le cours doit vivre. Ses flashcards suivront automatiquement ce cours.</p>
+   <label>Dossier<select value={folderId} onChange={e=>setFolderId(e.target.value)}>{options.map(o=><option key={o.id} value={o.id}>{o.label}</option>)}</select></label>
+   <div className="actions"><button onClick={onClose}>Annuler</button><button className="primary" onClick={()=>onMove(folderId||null)}>Ranger le cours</button></div>
+  </div>
+ </div>
+}
 function HistoryPage({h}){
  return <div className="page"><div className="title"><div><small>PROGRESSION</small><h1>Historique</h1></div></div>
   {h.length?<div className="list">{h.map(x=><div className="history" key={x.id}><span>{x.level==="perfect"?"🔵":x.level==="good"?"🟢":"🟡"}</span><div><b>{x.card}</b><small>{new Date(x.date).toLocaleString("fr-FR")}</small></div></div>)}</div>:<div className="panel empty"><History size={35}/><p>Ton historique apparaîtra ici.</p></div>}
