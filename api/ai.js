@@ -139,25 +139,6 @@ async function callGemini({apiKey,model,instructions,input,schema,maxOutputToken
   return {upstream,data};
 }
 
-async function callOpenAI({apiKey,model,instructions,input,schema,maxOutputTokens}){
-  const upstream=await fetch("https://api.openai.com/v1/responses",{
-    method:"POST",
-    headers:{
-      "Content-Type":"application/json",
-      "Authorization":"Bearer "+apiKey
-    },
-    body:JSON.stringify({
-      model,
-      instructions,
-      input,
-      max_output_tokens:maxOutputTokens,
-      text:{format:{type:"json_schema",name:"rmed_response",strict:true,schema}}
-    })
-  });
-  const data=await upstream.json().catch(()=>({}));
-  return {upstream,data};
-}
-
 module.exports=async function handler(req,res){
   cors(res);
   if(req.method==="OPTIONS")return res.status(204).end();
@@ -171,71 +152,38 @@ module.exports=async function handler(req,res){
 
   let body=req.body||{};
   if(typeof body==="string"){
-    try{body=JSON.parse(body)}catch{return json(res,400,{error:"Requête IA illisible."})}
-  }
-  const action=String(body?.action||"flashcard");
-  const text=String(body?.text||"").trim();
-  const context=String(body?.context||"").trim();
-  if(!text)return json(res,400,{error:"Aucune demande n’a été fournie."});
-  if(text.length>12000)return json(res,413,{error:"Demande trop longue."});
-
-  const instructions=buildInstructions(action);
-  const input=(action==="qcm_session"?"RESSOURCES POUR LE QCM:\n":"PASSAGE / DEMANDE:\n")+text+"\n\nCONTEXTE ET RESSOURCES PERTINENTES:\n"+context.slice(0,30000);
-  const schema=pickSchema(action);
-  const isQcm=action==="qcm_session";
-  const maxOutputTokens=isQcm?10000:action==="explain_error"?1800:1400;
-  const temperature=isQcm?0.45:0.35;
-
-  try{
-    if(process.env.GEMINI_API_KEY){
-      const models=[process.env.RMED_GEMINI_MODEL||"gemini-2.5-pro","gemini-2.5-flash"].filter((m,i,a)=>m&&a.indexOf(m)===i);
-      let lastError=null;
-      for(const model of models){
-        const {upstream,data}=await callGemini({
-          apiKey:process.env.GEMINI_API_KEY,
-          model,
-          instructions,
-          input,
-          schema,
-          maxOutputTokens,
-          temperature
-        });
-        if(upstream.ok){
-          const raw=textFromGemini(data);
-          let parsed=null;
-          try{parsed=JSON.parse(raw)}catch{}
-          if(!parsed)return json(res,502,{error:"Gemini a répondu dans un format inattendu."});
-          if(isQcm&&(!Array.isArray(parsed.questions)||parsed.questions.length!==30)){
-            lastError=new Error("Gemini n’a pas généré exactement 30 questions.");
-            continue;
-          }
-          return json(res,200,parsed);
-        }
-        lastError=data?.error?.message||new Error("Erreur Gemini.");
-        const retryable=[400,404,429,503].includes(upstream.status);
-        if(!retryable)break;
-      }
-      return json(res,502,{error:String(lastError?.message||lastError||"Gemini est indisponible.")});
+    try{
+    if(!process.env.GEMINI_API_KEY){
+      return json(res,500,{error:"RMed IA n’est pas encore connecté à Gemini. Ajoute GEMINI_API_KEY au backend Vercel pour activer l’IA gratuite."});
     }
-
-    if(process.env.OPENAI_API_KEY){
-      const {upstream,data}=await callOpenAI({
-        apiKey:process.env.OPENAI_API_KEY,
-        model:process.env.RMED_OPENAI_MODEL||"gpt-5-mini",
+    const models=[process.env.RMED_GEMINI_MODEL||"gemini-2.5-pro","gemini-2.5-flash"].filter((m,i,a)=>m&&a.indexOf(m)===i);
+    let lastError=null;
+    for(const model of models){
+      const {upstream,data}=await callGemini({
+        apiKey:process.env.GEMINI_API_KEY,
+        model,
         instructions,
         input,
         schema,
-        maxOutputTokens
+        maxOutputTokens,
+        temperature
       });
-      if(!upstream.ok)return json(res,upstream.status,{error:data?.error?.message||"Erreur du service IA."});
-      const raw=outputText(data);
-      let parsed=null;
-      try{parsed=JSON.parse(raw)}catch{}
-      if(!parsed)return json(res,502,{error:"La réponse IA n’a pas pu être interprétée."});
-      return json(res,200,parsed);
+      if(upstream.ok){
+        const raw=textFromGemini(data);
+        let parsed=null;
+        try{parsed=JSON.parse(raw)}catch{}
+        if(!parsed){lastError=new Error("Gemini a répondu dans un format inattendu.");continue}
+        if(isQcm&&(!Array.isArray(parsed.questions)||parsed.questions.length!==30)){
+          lastError=new Error("Gemini n’a pas généré exactement 30 questions.");
+          continue;
+        }
+        return json(res,200,parsed);
+      }
+      lastError=data?.error?.message||new Error("Erreur Gemini.");
+      const retryable=[400,404,429,503].includes(upstream.status);
+      if(!retryable)break;
     }
-
-    return json(res,500,{error:"Aucune IA n’est configurée. Ajoute GEMINI_API_KEY au backend RMed."});
+    return json(res,502,{error:String(lastError?.message||lastError||"Gemini est indisponible.")});
   }catch(err){
     console.error("RMed AI error",err);
     return json(res,500,{error:"Impossible de contacter le service IA."});
