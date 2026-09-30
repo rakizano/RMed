@@ -1,8 +1,8 @@
 import React,{useEffect,useMemo,useRef,useState}from"react";
 import{createRoot}from"react-dom/client";
 import{BookOpen,Brain,ChevronLeft,ChevronRight,Clock3,FileText,History,Home as HomeIcon,ListChecks,Minus,Plus,Search,Sparkles,Target,Trash2,Upload,X,Highlighter}from"lucide-react";
-import*as pdfjsLib from"pdfjs-dist/legacy/build/pdf.mjs";
-import workerUrl from"pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
+import*as pdfjsLib from"pdfjs-dist";
+import workerUrl from"pdfjs-dist/build/pdf.worker.min.js?url";
 import"./styles.css";
 
 
