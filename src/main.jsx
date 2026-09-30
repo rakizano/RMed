@@ -326,7 +326,7 @@ function DemoPage({pg,onSelection}){
 
 function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus,onSelection,locked,markTool,markColor}){
  const pageRef=useRef(null),canvasRef=useRef(null),textRef=useRef(null),contextRef=useRef("");
- const penRef=useRef({active:false,points:[],spans:new Set(),pointerId:null,scrollLeft:0,scrollTop:0,stage:null});
+ const penRef=useRef({active:false,points:[],pointerId:null,scrollLeft:0,scrollTop:0,stage:null,start:null,mode:"highlight",color:"#ffe66d99",raf:null});
  const touchRef=useRef(new Map());
  const panRef=useRef({active:false,lastX:0,lastY:0});
  const[height,setHeight]=useState(800);
@@ -337,217 +337,357 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,c
 
  useEffect(()=>{setDrawings(load(drawKey,[]));},[drawKey]);
  useEffect(()=>{save(drawKey,drawings);},[drawKey,drawings]);
- useEffect(()=>{let cancelled=false;
- async function render(){
+
+ useEffect(()=>{
+  let cancelled=false;
+  async function render(){
    try{
-     const pdfjsLib=await getPdfjs();
-     const page=await pdfDoc.getPage(pageNumber);
-     const viewport=page.getViewport({scale});
-     const dpr=window.devicePixelRatio||1;
-     const canvas=canvasRef.current;if(!canvas)return;
-     canvas.width=Math.floor(viewport.width*dpr);canvas.height=Math.floor(viewport.height*dpr);
-     canvas.style.width=viewport.width+"px";canvas.style.height=viewport.height+"px";
-     const ctx=canvas.getContext("2d");
-     await page.render({canvasContext:ctx,viewport,transform:dpr!==1?[dpr,0,0,dpr,0,0]:null}).promise;
-     if(cancelled)return;
-     setHeight(viewport.height);
-     const text=await page.getTextContent();
-     if(cancelled)return;
-     contextRef.current=text.items.map(i=>i.str).join(" ");
-     const layer=textRef.current;if(!layer)return;
-     layer.innerHTML="";
-     for(const item of text.items){
-       if(!item.str)continue;
-       const span=document.createElement("span");
-       const tx=pdfjsLib.Util.transform(viewport.transform,item.transform);
-       const fontHeight=Math.hypot(tx[2],tx[3]);
-       const angle=Math.atan2(tx[1],tx[0]);
-       span.textContent=item.str;
-       span.className="pdf-word";
-       span.style.left=tx[4]+"px";span.style.top=(tx[5]-fontHeight)+"px";
-       span.style.fontSize=fontHeight+"px";span.style.fontFamily=item.fontName||"sans-serif";
-       span.style.transform="rotate("+angle+"rad)";
-       layer.appendChild(span);
+    const pdfjsLib=await getPdfjs();
+    const page=await pdfDoc.getPage(pageNumber);
+    const viewport=page.getViewport({scale});
+    const dpr=window.devicePixelRatio||1;
+    const canvas=canvasRef.current;if(!canvas)return;
+    canvas.width=Math.floor(viewport.width*dpr);canvas.height=Math.floor(viewport.height*dpr);
+    canvas.style.width=viewport.width+"px";canvas.style.height=viewport.height+"px";
+    const ctx=canvas.getContext("2d");
+    await page.render({canvasContext:ctx,viewport,transform:dpr!==1?[dpr,0,0,dpr,0,0]:null}).promise;
+    if(cancelled)return;
+    setHeight(viewport.height);
+    const text=await page.getTextContent();
+    if(cancelled)return;
+    contextRef.current=text.items.map(i=>i.str).join(" ");
+    const layer=textRef.current;if(!layer)return;
+    layer.innerHTML="";
+    for(const item of text.items){
+     if(!item.str)continue;
+     const span=document.createElement("span");
+     const tx=pdfjsLib.Util.transform(viewport.transform,item.transform);
+     const fontHeight=Math.hypot(tx[2],tx[3]);
+     const angle=Math.atan2(tx[1],tx[0]);
+     span.textContent=item.str;
+     span.className="pdf-word";
+     span.style.left=tx[4]+"px";
+     span.style.top=(tx[5]-fontHeight)+"px";
+     span.style.fontSize=fontHeight+"px";
+     span.style.fontFamily=item.fontName||"sans-serif";
+     span.style.transform="rotate("+angle+"rad)";
+     layer.appendChild(span);
+    }
+    requestAnimationFrame(()=>{
+     if(focusHighlightId){
+      const el=document.getElementById("hl-"+focusHighlightId);
+      el?.scrollIntoView({behavior:"smooth",block:"center"});
+      clearFocus();
      }
-     requestAnimationFrame(()=>{if(focusHighlightId){const el=document.getElementById("hl-"+focusHighlightId);el?.scrollIntoView({behavior:"smooth",block:"center"});clearFocus()}});
+    });
    }catch(err){console.error("PDF render error",err)}
- }
- render();
- return()=>{cancelled=true;setPenTrace([]);setTempRects([])};
+  }
+  render();
+  return()=>{
+   cancelled=true;
+   const p=penRef.current;
+   if(p.raf)cancelAnimationFrame(p.raf);
+   p.active=false;
+   setPenTrace([]);
+   setTempRects([]);
+  };
  },[pdfDoc,pageNumber,scale]);
 
- function spanAtPoint(e){
-   const els=document.elementsFromPoint?.(e.clientX,e.clientY)||[];
-   let span=els.find(el=>el.classList?.contains("pdf-word"));
-   if(span)return span;
-   const range=document.caretRangeFromPoint?.(e.clientX,e.clientY);
-   const node=range?.startContainer;
-   return node?.parentElement?.closest?.(".pdf-word")||null;
+ function pointInsidePdf(clientX,clientY){
+  const root=pageRef.current?.getBoundingClientRect();
+  if(!root)return null;
+  return {x:clientX-root.left,y:clientY-root.top,root};
  }
 
- function updatePenVisual(e){
-   const p=penRef.current;
-   const root=pageRef.current?.getBoundingClientRect();if(!root)return;
-   p.points.push({x:e.clientX-root.left,y:e.clientY-root.top});
-   const span=spanAtPoint(e);
-   if(span)p.spans.add(span);
-   const spans=[...p.spans];
-   const rects=spans.map(el=>{const r=el.getBoundingClientRect();return{x:r.left-root.left,y:r.top-root.top,width:r.width,height:r.height,order:[...textRef.current.children].indexOf(el)}})
-     .filter(r=>r.width>1&&r.height>1).sort((a,b)=>a.order-b.order);
-   setTempRects(rects.map(({order,...r})=>r));
-   setPenTrace(p.points.slice(-140));
+ function getSpanAtClientPoint(clientX,clientY){
+  const els=document.elementsFromPoint?.(clientX,clientY)||[];
+  const span=els.find(el=>el.classList?.contains("pdf-word"));
+  if(span)return span;
+  const range=document.caretRangeFromPoint?.(clientX,clientY);
+  const node=range?.startContainer;
+  return node?.parentElement?.closest?.(".pdf-word")||null;
  }
 
- function penDown(e){
-   if(e.pointerType!=="pen")return;
-   e.preventDefault();
-   const stage=pageRef.current?.parentElement;
-   penRef.current={active:true,points:[],spans:new Set(),pointerId:e.pointerId,scrollLeft:stage?.scrollLeft||0,scrollTop:stage?.scrollTop||0,stage,mode:markTool,color:markColor};
-   if(stage){stage.classList.add("pencil-active");stage.scrollLeft=penRef.current.scrollLeft;stage.scrollTop=penRef.current.scrollTop}
-   e.currentTarget.setPointerCapture?.(e.pointerId);
-   if(markTool==="highlight")updatePenVisual(e);
-   else if(markTool==="pen")updateDrawVisual(e);
-   else if(markTool==="eraser")eraseAt(e);
- }
- function penMove(e){
-   if(!penRef.current.active||e.pointerType!=="pen")return;
-   e.preventDefault();
-   const p=penRef.current;
-   if(p.stage){p.stage.scrollLeft=p.scrollLeft;p.stage.scrollTop=p.scrollTop}
-   if(p.mode==="highlight")updatePenVisual(e);
-   else if(p.mode==="pen")updateDrawVisual(e);
-   else if(p.mode==="eraser")eraseAt(e);
- }
- function collectStrokeSpans(points){
-   if(!points.length||!textRef.current)return new Set();
-   const root=pageRef.current?.getBoundingClientRect();if(!root)return new Set();
-   const pts=points.map(p=>({x:p.x+root.left,y:p.y+root.top}));
-   const hit=new Set();
-   const spans=[...textRef.current.querySelectorAll(".pdf-word")];
-   for(const el of spans){
-     const r=el.getBoundingClientRect();
-     if(r.width<=1||r.height<=1)continue;
-     const pad=Math.max(5,Math.min(12,r.height*0.18));
-     const L=r.left-pad,R=r.right+pad,T=r.top-pad,B=r.bottom+pad;
-     let ok=false;
-     for(const pt of pts){
-       if(pt.x>=L&&pt.x<=R&&pt.y>=T&&pt.y<=B){ok=true;break}
-     }
-     if(!ok){
-       for(let i=1;i<pts.length;i++){
-         const a=pts[i-1],b=pts[i];
-         const minX=Math.min(a.x,b.x),maxX=Math.max(a.x,b.x);
-         const minY=Math.min(a.y,b.y),maxY=Math.max(a.y,b.y);
-         if(maxX<L||minX>R||maxY<T||minY>B)continue;
-         ok=true;break;
-       }
-     }
-     if(ok)hit.add(el);
+ function getCaretAtPoint(clientX,clientY){
+  try{
+   const direct=document.caretRangeFromPoint?.(clientX,clientY);
+   if(direct)return direct;
+   const pos=document.caretPositionFromPoint?.(clientX,clientY);
+   if(pos){
+    const r=document.createRange();
+    r.setStart(pos.offsetNode,pos.offset);
+    r.collapse(true);
+    return r;
    }
-   return hit;
+  }catch{}
+  return null;
  }
 
- function rectsFromSpans(spans){
-   const root=pageRef.current.getBoundingClientRect();
-   return [...spans].map(el=>{
-     const r=el.getBoundingClientRect();
-     return{x:r.left-root.left,y:r.top-root.top,width:r.width,height:r.height,order:[...textRef.current.children].indexOf(el),text:el.textContent||""};
-   }).filter(r=>r.width>1&&r.height>1).sort((a,b)=>a.order-b.order);
+ function getPointInfo(clientX,clientY){
+  const caret=getCaretAtPoint(clientX,clientY);
+  const span=getSpanAtClientPoint(clientX,clientY);
+  const children=[...textRef.current?.children||[]];
+  const index=span?children.indexOf(span):-1;
+  let offset=0;
+  if(caret&&span){
+   try{
+    const node=caret.startContainer;
+    if(span.contains(node))offset=caret.startOffset;
+    else if(node.nodeType===1&&span.contains(node))offset=Math.min(caret.startOffset,span.textContent?.length||0);
+   }catch{}
+  }
+  return {caret,span,index,offset};
  }
 
- function penUp(e){
-   const p=penRef.current;
-   if(!p.active||e.pointerType!=="pen")return;
-   e.preventDefault();
-   p.active=false;
-   if(p.stage){p.stage.classList.remove("pencil-active");p.stage.scrollLeft=p.scrollLeft;p.stage.scrollTop=p.scrollTop}
-   e.currentTarget.releasePointerCapture?.(p.pointerId);
-   if(p.mode==="pen"&&p.points.length>1){
-     setDrawings(x=>[...x,{id:uid(),points:p.points.slice(),color:p.color,width:5}]);
+ function buildPencilRange(start,end){
+  if(!textRef.current||!start||!end)return null;
+  const a=getPointInfo(start.clientX,start.clientY);
+  const b=getPointInfo(end.clientX,end.clientY);
+  if(!a.span&&!b.span)return null;
+
+  let forward=true;
+  if(a.index>=0&&b.index>=0){
+   if(a.index>b.index)forward=false;
+   else if(a.index===b.index&&a.offset>b.offset)forward=false;
+  }
+
+  const range=document.createRange();
+  try{
+   const first=forward?a:b;
+   const last=forward?b:a;
+   if(first.caret&&last.caret){
+    range.setStart(first.caret.startContainer,first.caret.startOffset);
+    range.setEnd(last.caret.startContainer,last.caret.startOffset);
+    if(!range.collapsed&&range.toString().trim())return range;
    }
-   setTempRects([]);setPenTrace([]);
-   if(p.mode!=="highlight")return;
-   const spans=new Set(p.spans);
-   collectStrokeSpans(p.points).forEach(el=>spans.add(el));
-   if(!spans.size)return;
-   const rects=rectsFromSpans(spans);
-   const text=rects.map(r=>r.text).join(" ").replace(/\s+/g," ").trim();
-   onSelection({text,rects:rects.map(({order,text,...r})=>r),context:contextRef.current,autoHighlight:true,color:p.color});
+  }catch{}
+
+  if(a.index>=0&&b.index>=0){
+   const children=[...textRef.current.children];
+   const lo=Math.min(a.index,b.index);
+   const hi=Math.max(a.index,b.index);
+   const from=children[lo],to=children[hi];
+   if(from&&to){
+    try{
+     range.setStart(forward?from.firstChild:to.firstChild,forward?0:(to.textContent?.length||0));
+     range.setEnd(forward?to.firstChild:from.firstChild,forward?(to.textContent?.length||0):0);
+     if(!range.collapsed)return range;
+    }catch{}
+   }
+  }
+  return null;
+ }
+
+ function rectsFromRange(range){
+  const root=pageRef.current?.getBoundingClientRect();
+  if(!root||!range)return [];
+  return [...range.getClientRects()].map(r=>({
+   x:r.left-root.left,
+   y:r.top-root.top,
+   width:r.width,
+   height:r.height
+  })).filter(r=>r.width>1&&r.height>1);
+ }
+
+ function updateLiveHighlight(){
+  const p=penRef.current;
+  if(!p.start||!p.points.length)return;
+  const last=p.points[p.points.length-1];
+  const root=pageRef.current?.getBoundingClientRect();
+  if(!root)return;
+  const end={clientX:last.x+root.left,clientY:last.y+root.top};
+  const range=buildPencilRange(p.start,end);
+  if(range){
+   setTempRects(rectsFromRange(range));
+   const txt=range.toString().replace(/\s+/g," ").trim();
+   p.liveText=txt;
+   p.liveRects=rectsFromRange(range);
+  }else{
+   setTempRects([]);
+   p.liveText="";
+   p.liveRects=[];
+  }
  }
 
  function updateDrawVisual(e){
-   const p=penRef.current;
-   const root=pageRef.current?.getBoundingClientRect();if(!root)return;
-   p.points.push({x:e.clientX-root.left,y:e.clientY-root.top});
-   setPenTrace(p.points.slice(-180));
+  const p=penRef.current;
+  const local=pointInsidePdf(e.clientX,e.clientY);
+  if(!local)return;
+  p.points.push({x:local.x,y:local.y});
+  setPenTrace(p.points.slice(-180));
  }
+
+ function freezeScroll(p){
+  if(!p.stage)return;
+  const lock=()=>{
+   if(!p.active)return;
+   if(p.stage.scrollLeft!==p.scrollLeft)p.stage.scrollLeft=p.scrollLeft;
+   if(p.stage.scrollTop!==p.scrollTop)p.stage.scrollTop=p.scrollTop;
+   p.raf=requestAnimationFrame(lock);
+  };
+  p.raf=requestAnimationFrame(lock);
+ }
+
+ function penDown(e){
+  if(e.pointerType!=="pen")return;
+  if(!pageRef.current?.contains(e.target))return;
+  e.preventDefault();
+  e.stopPropagation();
+  const local=pointInsidePdf(e.clientX,e.clientY);
+  if(!local)return;
+  const stage=pageRef.current?.parentElement;
+  const p=penRef.current;
+  if(p.active&&p.pointerId===e.pointerId)return;
+  if(p.raf)cancelAnimationFrame(p.raf);
+  penRef.current={
+   active:true,
+   points:[{x:local.x,y:local.y}],
+   pointerId:e.pointerId,
+   scrollLeft:stage?.scrollLeft||0,
+   scrollTop:stage?.scrollTop||0,
+   stage,
+   start:{clientX:e.clientX,clientY:e.clientY},
+   mode:markTool,
+   color:markColor,
+   liveText:"",
+   liveRects:[],
+   raf:null
+  };
+  if(stage){
+   stage.classList.add("pencil-active");
+   stage.scrollLeft=penRef.current.scrollLeft;
+   stage.scrollTop=penRef.current.scrollTop;
+  }
+  pageRef.current?.setPointerCapture?.(e.pointerId);
+  freezeScroll(penRef.current);
+  if(markTool==="highlight")updateLiveHighlight();
+  else if(markTool==="pen")updateDrawVisual(e);
+  else if(markTool==="eraser")eraseAt(e);
+ }
+
+ function penMove(e){
+  const p=penRef.current;
+  if(!p.active||e.pointerType!=="pen"||e.pointerId!==p.pointerId)return;
+  e.preventDefault();
+  e.stopPropagation();
+  if(p.stage){p.stage.scrollLeft=p.scrollLeft;p.stage.scrollTop=p.scrollTop;}
+  const local=pointInsidePdf(e.clientX,e.clientY);
+  if(local)p.points.push({x:local.x,y:local.y});
+  if(p.mode==="highlight")updateLiveHighlight();
+  else if(p.mode==="pen")setPenTrace(p.points.slice(-180));
+  else if(p.mode==="eraser")eraseAt(e);
+ }
+
+ function penUp(e){
+  const p=penRef.current;
+  if(!p.active||e.pointerType!=="pen"||e.pointerId!==p.pointerId)return;
+  e.preventDefault();
+  e.stopPropagation();
+  p.active=false;
+  if(p.raf)cancelAnimationFrame(p.raf);
+  if(p.stage){
+   p.stage.classList.remove("pencil-active");
+   p.stage.scrollLeft=p.scrollLeft;
+   p.stage.scrollTop=p.scrollTop;
+  }
+  try{pageRef.current?.releasePointerCapture?.(p.pointerId)}catch{}
+  if(p.mode==="pen"&&p.points.length>1){
+   setDrawings(x=>[...x,{id:uid(),points:p.points.slice(),color:p.color,width:5}]);
+  }
+  setTempRects([]);
+  setPenTrace([]);
+  if(p.mode!=="highlight")return;
+
+  const root=pageRef.current?.getBoundingClientRect();
+  if(!root||!p.start)return;
+  const end={clientX:e.clientX,clientY:e.clientY};
+  const range=buildPencilRange(p.start,end);
+  const text=(range?.toString()||p.liveText||"").replace(/\s+/g," ").trim();
+  const rects=range?rectsFromRange(range):(p.liveRects||[]);
+  if(!text)return;
+  onSelection({text,rects,context:contextRef.current,autoHighlight:true,color:p.color});
+ }
+
+ useEffect(()=>{
+  const down=e=>penDown(e);
+  const move=e=>penMove(e);
+  const up=e=>penUp(e);
+  document.addEventListener("pointerdown",down,true);
+  document.addEventListener("pointermove",move,true);
+  document.addEventListener("pointerup",up,true);
+  document.addEventListener("pointercancel",up,true);
+  return()=>{
+   document.removeEventListener("pointerdown",down,true);
+   document.removeEventListener("pointermove",move,true);
+   document.removeEventListener("pointerup",up,true);
+   document.removeEventListener("pointercancel",up,true);
+  };
+ });
+
  function pointDistanceToSegment(px,py,ax,ay,bx,by){
-   const dx=bx-ax,dy=by-ay;
-   if(dx===0&&dy===0)return Math.hypot(px-ax,py-ay);
-   const t=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/(dx*dx+dy*dy)));
-   return Math.hypot(px-(ax+t*dx),py-(ay+t*dy));
+  const dx=bx-ax,dy=by-ay;
+  if(dx===0&&dy===0)return Math.hypot(px-ax,py-ay);
+  const t=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/(dx*dx+dy*dy)));
+  return Math.hypot(px-(ax+t*dx),py-(ay+t*dy));
  }
+
  function eraseAt(e){
-   const root=pageRef.current?.getBoundingClientRect();if(!root)return;
-   const x=e.clientX-root.left,y=e.clientY-root.top;
-   setDrawings(prev=>prev.filter(d=>{
-     for(let i=1;i<d.points.length;i++){
-       const a=d.points[i-1],b=d.points[i];
-       if(pointDistanceToSegment(x,y,a.x,a.y,b.x,b.y)<22)return false;
-     }
-     return true;
-   }));
- }
- 
- function touchStart(e){
-   if(locked)return;
-   if(e.touches.length===2){
-     e.preventDefault();
-     const a=e.touches[0],b=e.touches[1];
-     panRef.current={active:true,lastX:(a.clientX+b.clientX)/2,lastY:(a.clientY+b.clientY)/2};
-   }else{
-     panRef.current.active=false;
+  const root=pageRef.current?.getBoundingClientRect();if(!root)return;
+  const x=e.clientX-root.left,y=e.clientY-root.top;
+  setDrawings(prev=>prev.filter(d=>{
+   for(let i=1;i<d.points.length;i++){
+    const a=d.points[i-1],b=d.points[i];
+    if(pointDistanceToSegment(x,y,a.x,a.y,b.x,b.y)<22)return false;
    }
+   return true;
+  }));
  }
- function touchMoveNative(e){
-   if(locked)return;
-   if(e.touches.length!==2){e.preventDefault();return;}
+
+ function touchStart(e){
+  if(e.touches.length===2){
    e.preventDefault();
    const a=e.touches[0],b=e.touches[1];
-   const cx=(a.clientX+b.clientX)/2,cy=(a.clientY+b.clientY)/2;
-   const stage=pageRef.current?.parentElement;
-   if(stage){
-     stage.scrollLeft-=cx-panRef.current.lastX;
-     stage.scrollTop-=cy-panRef.current.lastY;
-   }
-   panRef.current.lastX=cx;panRef.current.lastY=cy;
- }
- function touchEnd(){
+   panRef.current={active:true,lastX:(a.clientX+b.clientX)/2,lastY:(a.clientY+b.clientY)/2};
+  }else{
    panRef.current.active=false;
+  }
+  if(locked)e.preventDefault();
  }
+
+ function touchMoveNative(e){
+  if(locked){e.preventDefault();return;}
+  if(e.touches.length!==2){e.preventDefault();return;}
+  e.preventDefault();
+  const a=e.touches[0],b=e.touches[1];
+  const cx=(a.clientX+b.clientX)/2,cy=(a.clientY+b.clientY)/2;
+  const stage=pageRef.current?.parentElement;
+  if(stage&&panRef.current.active){
+   stage.scrollLeft-=cx-panRef.current.lastX;
+   stage.scrollTop-=cy-panRef.current.lastY;
+  }
+  panRef.current.lastX=cx;panRef.current.lastY=cy;
+ }
+
+ function touchEnd(){panRef.current.active=false;}
 
  function select(){
-   if(penRef.current.active||touchRef.current.size)return;
-   const s=window.getSelection();if(!s||s.isCollapsed||!textRef.current)return;
-   if(!textRef.current.contains(s.anchorNode))return;
-   const t=s.toString().trim();if(!t)return;
-   const root=pageRef.current.getBoundingClientRect();
-   const rects=Array.from(s.getRangeAt(0).getClientRects()).map(r=>({x:r.left-root.left,y:r.top-root.top,width:r.width,height:r.height})).filter(r=>r.width>1&&r.height>1);
-   onSelection({text:t,rects,context:contextRef.current});
-   s.removeAllRanges();
+  if(penRef.current.active||touchRef.current.size)return;
+  const s=window.getSelection();if(!s||s.isCollapsed||!textRef.current)return;
+  if(!textRef.current.contains(s.anchorNode))return;
+  const t=s.toString().trim();if(!t)return;
+  const root=pageRef.current.getBoundingClientRect();
+  const rects=Array.from(s.getRangeAt(0).getClientRects()).map(r=>({x:r.left-root.left,y:r.top-root.top,width:r.width,height:r.height})).filter(r=>r.width>1&&r.height>1);
+  onSelection({text:t,rects,context:contextRef.current});
+  s.removeAllRanges();
  }
 
- function pointerDown(e){if(e.pointerType==="pen")penDown(e)}
- function pointerMove(e){if(e.pointerType==="pen")penMove(e)}
- function pointerUp(e){if(e.pointerType==="pen")penUp(e)}
-
- return <div className={"pdf-stage "+(locked?"pdf-stage-locked":"")} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp} onTouchStart={touchStart} onTouchMove={touchMoveNative} onTouchEnd={touchEnd} onTouchCancel={touchEnd}>
+ return <div className={"pdf-stage "+(locked?"pdf-stage-locked":"")} onTouchStart={touchStart} onTouchMove={touchMoveNative} onTouchEnd={touchEnd} onTouchCancel={touchEnd}>
   <div className="pdf-page" ref={pageRef} style={{height}} onMouseUp={select}>
    <canvas ref={canvasRef}/>
    <div className="pdf-highlights">
     {drawings.length>0&&<svg className="drawings-layer" viewBox={"0 0 "+Math.max(1,pageRef.current?.clientWidth||1)+" "+Math.max(1,pageRef.current?.clientHeight||1)} preserveAspectRatio="none">{drawings.map(d=><polyline key={d.id} points={d.points.map(p=>p.x+","+p.y).join(" ")} fill="none" stroke={d.color} strokeWidth={d.width||5} strokeLinecap="round" strokeLinejoin="round"/>)}</svg>}
-    {penTrace.length>1&&<svg className="pen-trace" viewBox={"0 0 "+Math.max(1,pageRef.current?.clientWidth||1)+" "+Math.max(1,pageRef.current?.clientHeight||1)} preserveAspectRatio="none"><polyline points={penTrace.map(p=>p.x+","+p.y).join(" ")} fill="none" stroke={markTool==="pen"?markColor:markColor} strokeWidth={markTool==="pen"?5:14} strokeLinecap="round" strokeLinejoin="round"/></svg>}
-    {tempRects.length>0&&<div className="highlight-group live-highlight">{tempRects.map((r,i)=><span key={"t"+i} style={{left:r.x,top:r.y,width:r.width,height:r.height}}/> )}</div>}
+    {penTrace.length>1&&<svg className="pen-trace" viewBox={"0 0 "+Math.max(1,pageRef.current?.clientWidth||1)+" "+Math.max(1,pageRef.current?.clientHeight||1)} preserveAspectRatio="none"><polyline points={penTrace.map(p=>p.x+","+p.y).join(" ")} fill="none" stroke={markColor} strokeWidth={markTool==="pen"?5:14} strokeLinecap="round" strokeLinejoin="round"/></svg>}
+    {tempRects.length>0&&<div className="highlight-group live-highlight">{tempRects.map((r,i)=><span key={"t"+i} style={{left:r.x,top:r.y,width:r.width,height:r.height,background:markColor}}/> )}</div>}
     {highlights.map(h=><div key={h.id} id={"hl-"+h.id} className="highlight-group" onClick={()=>onSelection({text:h.text,rects:h.rects,context:h.context,highlightId:h.id})}>{h.rects.map((r,i)=><span key={i} style={{left:r.x,top:r.y,width:r.width,height:r.height,background:h.color||"#ffe66d99"}}/> )}</div>)}
    </div>
    <div className="pdf-text" ref={textRef}/>
