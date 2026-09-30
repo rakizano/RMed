@@ -781,8 +781,8 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,selection,focusHig
     {["#ffe66d99","#ffd6a599","#c8f7b899","#cbd7ff99","#e9d0ff99"].map(c=><button key={c} className={toolColor===c?"color chosen-color":"color"} style={{background:c.replace("99","")}} onClick={()=>{setTool("highlight");setHighlightBox(null);setToolColor?.(c);window.getSelection()?.removeAllRanges();onSelection?.(null)}} aria-label="Couleur de surlignage"/>)}
    </div>
   </div>
-  {highlightBox&&<div className="highlight-selection-box" style={{left:Math.min(highlightBox.x,highlightBox.x+highlightBox.width),top:Math.min(highlightBox.y,highlightBox.y+highlightBox.height),width:Math.abs(highlightBox.width),height:Math.abs(highlightBox.height)}}/>}
   <div className="pdf-page" ref={pageRef} style={{height}}>
+   {highlightBox&&<div className="highlight-selection-box" style={{left:Math.min(highlightBox.x,highlightBox.x+highlightBox.width),top:Math.min(highlightBox.y,highlightBox.y+highlightBox.height),width:Math.abs(highlightBox.width),height:Math.abs(highlightBox.height)}}/>}
    <canvas ref={canvasRef}/>
    <div className="pdf-highlights">{highlights.map(h=><div key={h.id} id={"hl-"+h.id} className="highlight-group">{(h.rects||[]).map((r,i)=><span key={i} onPointerDown={e=>{if(tool==="erase"){e.preventDefault();e.stopPropagation();onEraseHighlight(h.id)}}} onClick={e=>{if(tool==="erase"){e.preventDefault();e.stopPropagation();onEraseHighlight(h.id)}}} style={{left:r.x,top:r.y,width:r.width,height:r.height,background:h.color||"#ffe66d99"}}/> )}</div>)}</div>
    <div className="pdf-text" ref={textRef}/>
@@ -915,26 +915,60 @@ function UploadModal({onClose,onFile}){
 }
 
 function ExplainSelectionModal({selection,course,getContext,onClose}){
- const[answer,setAnswer]=useState("");
+ const[article,setArticle]=useState(null);
  const[busy,setBusy]=useState(true);
  const[error,setError]=useState("");
+ const[aiFallback,setAiFallback]=useState(false);
+ const[aiAnswer,setAiAnswer]=useState("");
+ const[aiBusy,setAiBusy]=useState(false);
+
  useEffect(()=>{
   let alive=true;
   (async()=>{
    try{
-    const context=await getContext(selection);
-    const data=await callRMedAI({action:"explain",text:selection.text,context});
-    if(alive)setAnswer(data?.answer||"Je n’ai pas réussi à produire une explication.");
-   }catch(err){if(alive)setError(err?.message||"IA indisponible")}
+    const query=String(selection?.text||"").replace(/\s+/g," ").trim().slice(0,220);
+    const res=await fetch("https://fr.wikipedia.org/w/rest.php/v1/search/page?q="+encodeURIComponent(query)+"&limit=3",{headers:{Accept:"application/json"}});
+    if(!res.ok)throw new Error("Recherche Wikipédia indisponible");
+    const data=await res.json();
+    const first=data?.pages?.[0];
+    if(!first)throw new Error("Aucun article Wikipédia pertinent trouvé.");
+    let summary=null;
+    try{
+      const s=await fetch("https://fr.wikipedia.org/api/rest_v1/page/summary/"+encodeURIComponent(first.key),{headers:{Accept:"application/json"}});
+      if(s.ok)summary=await s.json();
+    }catch{}
+    if(alive)setArticle({
+      title:summary?.title||first.title,
+      extract:summary?.extract||first.excerpt||first.description||"Article Wikipédia trouvé.",
+      url:"https://fr.wikipedia.org/wiki/"+encodeURIComponent((summary?.key||first.key||first.title).replace(/ /g,"_"))
+    });
+   }catch(err){if(alive)setError(err?.message||"Aucun article Wikipédia trouvé.");}
    finally{if(alive)setBusy(false)}
   })();
   return()=>{alive=false};
- },[selection,getContext]);
+ },[selection]);
+
+ async function useAI(){
+  if(aiBusy)return;
+  setAiBusy(true);setError("");
+  try{
+   const context=await getContext(selection);
+   const data=await callRMedAI({action:"explain",text:selection.text,context});
+   setAiAnswer(data?.answer||"Je n’ai pas réussi à produire une explication.");
+   setAiFallback(true);
+  }catch(err){setError(err?.message||"IA indisponible");}
+  finally{setAiBusy(false)}
+ }
+
  return <div className="overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
   <div className="modal explain-selection-modal">
    <div className="mh"><div><small className="eyebrow">EXPLICATION</small><h2>Comprendre</h2></div><button onClick={onClose}><X size={18}/></button></div>
    <div className="explain-source"><small>{course?.title||"Ton cours"}</small><p>« {selection.text} »</p></div>
-   {busy?<div className="explain-loading"><Sparkles size={18}/> RMed prépare une explication claire…</div>:error?<div className="ai-error">{error}</div>:<div className="ai-answer">{answer}</div>}
+   {busy?<div className="explain-loading"><Sparkles size={18}/> Recherche Wikipédia…</div>:
+    aiFallback?<div className="ai-answer">{aiAnswer}</div>:
+    article?<><div className="wikipedia-result"><div className="wikipedia-label">WIKIPÉDIA</div><h3>{article.title}</h3><p dangerouslySetInnerHTML={{__html:article.extract}}/></div><div className="actions"><a className="primary explain-wikipedia-link" href={article.url} target="_blank" rel="noreferrer">Ouvrir l’article Wikipédia ↗</a><button onClick={useAI} disabled={aiBusy}>{aiBusy?"RMed prépare…":"Compléter avec RMed IA"}</button></div></>:
+    <><div className="ai-error">{error}</div><div className="actions"><button onClick={useAI} disabled={aiBusy}>{aiBusy?"RMed prépare…":"Essayer avec RMed IA"}</button></div></>}
+   {!busy&&article&&!aiFallback&&error&&<div className="ai-error">{error}</div>}
    <div className="actions"><button onClick={onClose}>Fermer</button></div>
   </div>
  </div>
