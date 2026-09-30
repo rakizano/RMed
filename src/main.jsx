@@ -401,6 +401,13 @@ function App(){
 
  function currentPage(){return course.pages.find(x=>x.n===pageNumber)||course.pages[0]}
 
+ async function getSelectionAIContext(selection){
+   const base=String(selection?.context||selection?.text||"").trim();
+   try{
+     const resource=await retrieveResourceContext(courses,{courseId:course?.id,query:selection?.text||"",limit:12000,maxChunks:10});
+     return [base,resource].filter(Boolean).join("\n\n");
+   }catch{return base}
+ }
  function addHighlight(selection){
    if(!selection?.text)return null;
    const pg=currentPage();
@@ -421,23 +428,40 @@ function App(){
 
  function onSelection(selection){
    if(!selection?.text?.trim())return;
-   const hId=selection.highlightId||addHighlight(selection);
-   setSel({...selection,highlightId:hId});
+   setSel({...selection,courseId:course.id,page:pageNumber});
  }
  
  async function openCreator(selection=sel){
-   if(!selection)return;
-   const hId=selection.highlightId||addHighlight(selection);
-   setDraft({type:"basic",front:"",back:"",highlightId:hId,source:selection.text,page:pageNumber,aiGenerating:true,aiError:""});
+   if(!selection?.text?.trim())return;
+   setDraft({type:"basic",front:"",back:"",highlightId:selection.highlightId||null,source:selection.text,page:pageNumber,aiGenerating:true,aiError:""});
    setModal(true);
    try{
-    const data=await callRMedAI({action:"flashcard",text:selection.text,context:selection.context||selection.text});
-    if(data?.front&&data?.back){
-      setDraft(d=>d?{...d,type:data.type||"basic",front:data.front,back:data.back,aiGenerating:false,aiError:""}:d);
-    }else throw new Error("Réponse IA incomplète.");
-   }catch(err){
-    setDraft(d=>d?{...d,aiGenerating:false,aiError:err?.message||"IA indisponible"}:d);
+    const aiContext=await getSelectionAIContext(selection);
+    const data=await callRMedAI({action:"flashcard",text:selection.text,context:aiContext});
+    if(data?.front&&data?.back)setDraft(d=>d?{...d,type:data.type||"basic",front:data.front,back:data.back,aiGenerating:false,aiError:""}:d);
+    else throw new Error("Réponse IA incomplète.");
+   }catch(err){setDraft(d=>d?{...d,aiGenerating:false,aiError:err?.message||"IA indisponible"}:d)}
+ }
+ function persistSelection(selection,color){
+   if(!selection?.text?.trim())return null;
+   const pg=course.pages.find(x=>x.n===Number(selection.page||pageNumber))||currentPage();
+   const existing=highlights.find(h=>h.courseId===course.id&&h.pageId===pg.id&&h.text===selection.text);
+   if(existing){
+     setHighlights(x=>x.map(h=>h.id===existing.id?{...h,color:color||h.color,rects:selection.rects?.length?selection.rects:h.rects}:h));
+     return existing.id;
    }
+   const h={id:uid(),courseId:course.id,pageId:pg.id,page:pg.n,text:selection.text,rects:selection.rects||[],context:selection.context||selection.text,color:color||"#ffe66d99",created:Date.now()};
+   setHighlights(x=>[...x,h]);
+   return h.id;
+ }
+ function handleHighlightSelection(selection){
+   const id=persistSelection(selection,highlightColor);
+   setSel(s=>s?{...s,highlightId:id}:s);
+ }
+ function handleExplainSelection(selection){
+   if(!selection?.text?.trim())return;
+   setExplainSelection(selection);
+   setSel(null);
  }
  
  function saveCard(){
@@ -446,7 +470,7 @@ function App(){
     setCards(x=>x.map(c=>c.id===draft.editingId?{...c,front:draft.front.trim(),back:draft.back.trim(),type:draft.type||c.type||"basic"}:c));
    }else{
     const hId=draft.highlightId;
-    setCards(x=>[...x,{id:uid(),courseId:course.id,pageId:currentPage().id,page:pageNumber,highlightId:hId,source:draft.source||draft.back,type:"basic",front:draft.front.trim(),back:draft.back.trim(),level:null,next:Date.now(),created:Date.now()}]);
+    setCards(x=>[...x,{id:uid(),courseId:course.id,pageId:(course.pages.find(x=>x.n===Number(draft.page||pageNumber))||currentPage()).id,page:Number(draft.page||pageNumber),highlightId:hId,source:draft.source||draft.back,type:"basic",front:draft.front.trim(),back:draft.back.trim(),level:null,next:Date.now(),created:Date.now()}]);
    }
    setModal(false);setDraft(null);setSel(null);
  }
@@ -454,7 +478,6 @@ function App(){
  function deleteCard(id){setCards(x=>x.filter(c=>c.id!==id))}
  function editCard(c){
    setDraft({editingId:c.id,type:c.type||"basic",front:c.front,back:c.back,source:c.source||"",page:c.page,highlightId:c.highlightId});
-   setSuggestions([]);
    setModal(true);
  }
  function rate(level){
