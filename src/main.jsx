@@ -499,7 +499,12 @@ function App(){
  }
  function handleHighlightSelection(selection){
    const id=persistSelection(selection,highlightColor);
+   const nextSelection=selection?{...selection,highlightId:id}:selection;
    setSel(s=>s?{...s,highlightId:id}:s);
+   // Surlignage = intention de créer une carte : on ouvre directement le panneau.
+   if(nextSelection?.text?.trim()){
+     window.setTimeout(()=>openCreator(nextSelection),40);
+   }
  }
  function handleExplainSelection(selection){
    if(!selection?.text?.trim())return;
@@ -566,7 +571,7 @@ function App(){
   {moveCourseId&&<MoveCourseModal course={courses.find(c=>c.id===moveCourseId)||course} folders={folders} onMove={folderId=>moveCourseToFolder(moveCourseId,folderId)} onClose={()=>setMoveCourseId(null)}/>}
   {aiOpen&&<AIAssistant selection={sel} courses={courses} course={course} onClose={()=>setAiOpen(false)}/>} 
   {explainSelection&&<ExplainSelectionModal selection={explainSelection} courses={courses} course={course} getContext={getSelectionAIContext} onClose={()=>setExplainSelection(null)}/>}
-  {modal&&<CardModal draft={draft} setDraft={setDraft} onClose={()=>{setModal(false);setDraft(null)}} onSave={saveCard}/>}
+  {modal&&<CardDock draft={draft} setDraft={setDraft} onClose={()=>{setModal(false);setDraft(null)}} onSave={saveCard}/>}
  </div>
 }
 
@@ -1064,6 +1069,86 @@ function ExplainSelectionModal({selection,course,getContext,onClose}){
    <div className="actions"><button onClick={onClose}>Fermer</button></div>
   </div>
  </div>
+}
+
+
+function CardDock({draft,setDraft,onClose,onSave}){
+ const[busy,setBusy]=useState(false);
+ const[imageBusy,setImageBusy]=useState(false);
+
+ async function addImages(e){
+  const files=[...(e.target.files||[])]; e.target.value="";
+  if(!files.length)return;
+  setImageBusy(true);
+  try{
+   const added=[];
+   for(const file of files.slice(0,6))added.push(await prepareCardImage(file));
+   setDraft(x=>x?{...x,images:[...(x.images||[]),...added].slice(0,6)}:x);
+  }catch(err){
+   setDraft(x=>x?{...x,aiError:err?.message||"Impossible d’ajouter l’image."}:x);
+  }finally{setImageBusy(false)}
+ }
+ function removeImage(index){setDraft(x=>x?{...x,images:(x.images||[]).filter((_,i)=>i!==index)}:x);}
+ async function regenerate(){
+  if(!draft?.source||busy)return;
+  setBusy(true);setDraft(x=>x?{...x,aiGenerating:true,aiError:""}:x);
+  try{
+   const data=await callRMedAI({action:"flashcard",text:draft.source,context:draft.source});
+   if(data?.front&&data?.back){
+    setDraft(x=>x?{...x,type:data.type||"basic",front:data.front,back:data.back,aiGenerating:false,aiError:""}:x);
+   }else throw new Error("Réponse IA incomplète.");
+  }catch(err){
+   setDraft(x=>x?{...x,aiGenerating:false,aiError:err?.message||"IA indisponible"}:x);
+  }finally{setBusy(false)}
+ }
+ return <aside className="card-dock" aria-label="Création de flashcard">
+  <div className="card-dock-head">
+   <div className="card-dock-title">
+    <div className="card-dock-icon"><Sparkles size={17}/></div>
+    <div><small>CRÉATION EN DIRECT</small><h2>Ta flashcard</h2></div>
+   </div>
+   <button className="card-dock-close" onClick={onClose} title="Fermer"><X size={18}/></button>
+  </div>
+
+  <div className="card-dock-source">
+   <div className="card-dock-source-top"><span>📄 Passage sélectionné</span><b>Page {draft?.page||"—"}</b></div>
+   <p>« {draft?.source||"Sélectionne un passage dans le PDF."} »</p>
+  </div>
+
+  <div className="card-dock-ai">
+   <div className="card-dock-ai-copy">
+    <div><span className="ai-live-dot"/> <b>ChatGPT / IA</b></div>
+    <small>{draft?.aiGenerating?"Je transforme ta sélection en vraie carte…":"Carte prête — vérifie-la puis ajoute-la."}</small>
+   </div>
+   <button onClick={regenerate} disabled={draft?.aiGenerating||busy}>
+    {draft?.aiGenerating||busy?"…":"↻"}
+   </button>
+  </div>
+
+  {draft?.aiError&&<div className="ai-error">{draft.aiError}</div>}
+
+  <div className="card-dock-fields">
+   <label><span>RECTO <em>{draft?.type==="cloze"?"TEXTE À TROUS":draft?.type==="concept"?"CONCEPT":"QUESTION"}</em></span>
+    <textarea value={draft?.front||""} onChange={e=>setDraft(x=>({...x,front:e.target.value,aiError:""}))} placeholder="Question"/>
+   </label>
+   <label><span>VERSO</span>
+    <textarea value={draft?.back||""} onChange={e=>setDraft(x=>({...x,back:e.target.value,aiError:""}))} placeholder="Réponse"/>
+   </label>
+  </div>
+
+  <div className="card-dock-images">
+   <div><b>🖼️ Image</b><small>Optionnel</small></div>
+   <label>{imageBusy?"Ajout…":"Ajouter"}<input type="file" accept="image/*" multiple onChange={addImages} disabled={imageBusy}/></label>
+   {!!draft?.images?.length&&<div className="card-dock-image-list">{draft.images.map((src,i)=><div key={src+i}><img src={src} alt=""/><button onClick={()=>removeImage(i)}>×</button></div>)}</div>}
+  </div>
+
+  <div className="card-dock-actions">
+   <button className="card-dock-cancel" onClick={onClose}>Annuler</button>
+   <button className="card-dock-save" onClick={onSave} disabled={!draft?.front?.trim()||!draft?.back?.trim()}>
+    <span>Ajouter à mes cartes</span><span>↗</span>
+   </button>
+  </div>
+ </aside>
 }
 
 function CardModal({draft,setDraft,onClose,onSave}){
