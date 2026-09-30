@@ -790,6 +790,93 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,selection,focusHig
   </div>
  </div>
 }
+function ExternalPdfReader({courseId,initialPage=1}){
+ const[courses]=useState(()=>load("rmed_courses",[demo]));
+ const course=courses.find(c=>c.id===courseId);
+ const[pageNumber,setPageNumber]=useState(Math.max(1,initialPage));
+ const[pdfDoc,setPdfDoc]=useState(null);
+ const[loading,setLoading]=useState(true);
+ const[error,setError]=useState("");
+ const[zoom,setZoom]=useState(1.25);
+ const[highlights,setHighlights]=useState(()=>load("rmed_highlights",[]));
+ const[sel,setSel]=useState(null);
+
+ useEffect(()=>save("rmed_highlights",highlights),[highlights]);
+
+ useEffect(()=>{
+  let cancelled=false;
+  async function open(){
+   if(!course){setError("Cours introuvable.");setLoading(false);return}
+   try{
+    const data=await getPdf(course.id);
+    if(!data)throw new Error("PDF introuvable dans le stockage de cet appareil.");
+    const doc=await openPdfDocument(data);
+    if(cancelled)return;
+    setPdfDoc(doc);
+    if(!course.pages?.length){
+      const pages=Array.from({length:doc.numPages},(_,i)=>({id:course.id+"-p"+(i+1),n:i+1}));
+      const updatedCourses=courses.map(c=>c.id===course.id?{...c,pages}:c);
+      save("rmed_courses",updatedCourses);
+    }
+    setPageNumber(p=>Math.min(Math.max(1,p),doc.numPages));
+   }catch(err){
+    if(!cancelled)setError(err?.message||"Impossible d’ouvrir le PDF.");
+   }finally{
+    if(!cancelled)setLoading(false);
+   }
+  }
+  open();
+  return()=>{cancelled=true};
+ },[course?.id]);
+
+ useEffect(()=>{
+  const bc=typeof BroadcastChannel!=="undefined"?new BroadcastChannel("rmed-highlights"):null;
+  const onStorage=e=>{if(e.key==="rmed_highlights"&&e.newValue){try{setHighlights(JSON.parse(e.newValue))}catch{}}};
+  window.addEventListener("storage",onStorage);
+  return()=>{window.removeEventListener("storage",onStorage);bc?.close()};
+ },[]);
+
+ function addExternalHighlight(selection){
+  if(!selection?.text||!course)return;
+  const pg=course.pages.find(x=>x.n===pageNumber)||{id:course.id+"-p"+pageNumber,n:pageNumber};
+  const existing=highlights.find(h=>h.courseId===course.id&&h.pageId===pg.id&&h.text===selection.text);
+  if(existing){setSel({...selection,highlightId:existing.id});return}
+  const h={id:uid(),courseId:course.id,pageId:pg.id,page:pageNumber,text:selection.text,rects:selection.rects||[],context:selection.context||selection.text,color:selection.color||"#ffe66d99",created:Date.now()};
+  setHighlights(x=>[...x,h]);
+  setSel({...selection,highlightId:h.id});
+  try{new BroadcastChannel("rmed-highlights").postMessage(h)}catch{}
+ }
+ function eraseExternalHighlight(id){if(!id)return;setHighlights(x=>x.filter(h=>h.id!==id));setSel(s=>s?.highlightId===id?null:s)}
+
+ if(!course)return <div className="external-reader"><div className="external-reader-state">Cours introuvable.</div></div>;
+
+ return <div className="external-reader">
+  <div className="external-reader-toolbar">
+   <button onClick={()=>window.close()} title="Fermer le lecteur"><ArrowLeft size={18}/><span>RMed</span></button>
+   <div className="external-reader-title"><b>{course.title}</b><span>Page {pageNumber} / {pdfDoc?.numPages||course.pages.length||"…"}</span></div>
+   <div className="external-reader-actions">
+    <button onClick={()=>setPageNumber(p=>Math.max(1,p-1))} disabled={pageNumber<=1}><ChevronLeft/></button>
+    <button onClick={()=>setPageNumber(p=>Math.min(pdfDoc?.numPages||course.pages.length,p+1))} disabled={pageNumber>=(pdfDoc?.numPages||course.pages.length)}><ChevronRight/></button>
+    <button onClick={()=>setZoom(z=>Math.max(.75,z-.1))}><Minus/></button>
+    <span>{Math.round(zoom*100)}%</span>
+    <button onClick={()=>setZoom(z=>Math.min(3,z+.1))}><Plus/></button>
+    
+   </div>
+  </div>
+  {loading&&<div className="external-reader-state">Ouverture du PDF…</div>}
+  {error&&<div className="external-reader-state"><b>Impossible d’ouvrir le PDF</b><p>{error}</p></div>}
+  {!loading&&!error&&pdfDoc&&<div className="external-reader-viewport">
+    <div className="external-reader-page-wrap">
+      <PDFPage courseId={course.id} pdfDoc={pdfDoc} pageNumber={pageNumber} scale={zoom} highlights={highlights.filter(h=>h.courseId===course.id&&h.page===pageNumber)} focusHighlightId={null} clearFocus={()=>{}} onSelection={addExternalHighlight} onEraseHighlight={eraseExternalHighlight}/>
+    </div>
+  </div>}
+  {sel&&<div className="external-selection">
+    <div><Highlighter size={15}/><span>« {sel.text} »</span></div>
+    <button onClick={()=>setSel(null)}>OK</button>
+   </div>}
+ </div>
+}
+
 function SelectionBar({sel,onCreate,onHighlight,onExplain}){
  const anchor=sel?.rects?.length?sel.rects[sel.rects.length-1]:{x:24,y:40,width:0,height:0};
  return <div className="selection-popover" style={{left:Math.max(12,anchor.x),top:Math.max(8,anchor.y+anchor.height+8)}}>
