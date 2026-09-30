@@ -1473,7 +1473,7 @@ function FlashcardBatchModal({data,onClose,onOpenCards}){
 }
 function MoveCourseModal({course,folders,onMove,onClose}){
  const[folderId,setFolderId]=useState(course?.folderId||"");
- const options=[{id:"",label:"Racine — Tous les cours"},...folders.map(f=>({id:f.id,label:folderPath(folders,f.id).join(" / "))})); 
+ const options=[{id:"",label:"Racine — Tous les cours"},...folders.map(f=>({id:f.id,label:folderPath(folders,f.id).join(" / ")}))]; 
  return <div className="overlay" onClick={e=>{if(e.target===e.currentTarget)onClose()}}>
   <div className="modal move-modal">
    <div className="mh"><div><small className="eyebrow">ORGANISATION</small><h2>Ranger « {course?.title} »</h2></div><button onClick={onClose}><X size={18}/></button></div>
