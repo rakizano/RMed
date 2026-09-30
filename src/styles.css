@@ -1099,3 +1099,21 @@
   background:#eceaff;
   color:#5c51df;
 }
+
+
+/* Final reader-tool behavior: highlight = drag-to-highlight, no text-selection lock. */
+.pdf-stage.tool-highlight .pdf-text,
+.pdf-stage.tool-highlight .pdf-word,
+.pdf-stage.tool-highlight .pdf-text span{
+  pointer-events:auto!important;
+  -webkit-user-select:text!important;
+  user-select:text!important;
+  cursor:text!important;
+}
+.pdf-stage.tool-highlight{
+  touch-action:auto!important;
+}
+.pdf-stage.tool-highlight .pdf-highlights,
+.pdf-stage.tool-highlight .pdf-highlights *{
+  pointer-events:none!important;
+}
