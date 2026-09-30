@@ -418,6 +418,43 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,c
    else if(p.mode==="pen")updateDrawVisual(e);
    else if(p.mode==="eraser")eraseAt(e);
  }
+ function collectStrokeSpans(points){
+   if(!points.length||!textRef.current)return new Set();
+   const root=pageRef.current?.getBoundingClientRect();if(!root)return new Set();
+   const pts=points.map(p=>({x:p.x+root.left,y:p.y+root.top}));
+   const hit=new Set();
+   const spans=[...textRef.current.querySelectorAll(".pdf-word")];
+   for(const el of spans){
+     const r=el.getBoundingClientRect();
+     if(r.width<=1||r.height<=1)continue;
+     const pad=Math.max(5,Math.min(12,r.height*0.18));
+     const L=r.left-pad,R=r.right+pad,T=r.top-pad,B=r.bottom+pad;
+     let ok=false;
+     for(const pt of pts){
+       if(pt.x>=L&&pt.x<=R&&pt.y>=T&&pt.y<=B){ok=true;break}
+     }
+     if(!ok){
+       for(let i=1;i<pts.length;i++){
+         const a=pts[i-1],b=pts[i];
+         const minX=Math.min(a.x,b.x),maxX=Math.max(a.x,b.x);
+         const minY=Math.min(a.y,b.y),maxY=Math.max(a.y,b.y);
+         if(maxX<L||minX>R||maxY<T||minY>B)continue;
+         ok=true;break;
+       }
+     }
+     if(ok)hit.add(el);
+   }
+   return hit;
+ }
+
+ function rectsFromSpans(spans){
+   const root=pageRef.current.getBoundingClientRect();
+   return [...spans].map(el=>{
+     const r=el.getBoundingClientRect();
+     return{x:r.left-root.left,y:r.top-root.top,width:r.width,height:r.height,order:[...textRef.current.children].indexOf(el),text:el.textContent||""};
+   }).filter(r=>r.width>1&&r.height>1).sort((a,b)=>a.order-b.order);
+ }
+
  function penUp(e){
    const p=penRef.current;
    if(!p.active||e.pointerType!=="pen")return;
@@ -428,14 +465,14 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,c
    if(p.mode==="pen"&&p.points.length>1){
      setDrawings(x=>[...x,{id:uid(),points:p.points.slice(),color:p.color,width:5}]);
    }
-   const spans=[...p.spans];
    setTempRects([]);setPenTrace([]);
-   if(p.mode!=="highlight"||!spans.length)return;
-   const root=pageRef.current.getBoundingClientRect();
-   const rects=spans.map(el=>{const r=el.getBoundingClientRect();return{x:r.left-root.left,y:r.top-root.top,width:r.width,height:r.height,order:[...textRef.current.children].indexOf(el)}})
-     .filter(r=>r.width>1&&r.height>1).sort((a,b)=>a.order-b.order);
-   const text=spans.map(el=>el.textContent).join(" ").replace(/\s+/g," ").trim();
-   onSelection({text,rects:rects.map(({order,...r})=>r),context:contextRef.current,autoHighlight:true,color:p.color});
+   if(p.mode!=="highlight")return;
+   const spans=new Set(p.spans);
+   collectStrokeSpans(p.points).forEach(el=>spans.add(el));
+   if(!spans.size)return;
+   const rects=rectsFromSpans(spans);
+   const text=rects.map(r=>r.text).join(" ").replace(/\s+/g," ").trim();
+   onSelection({text,rects:rects.map(({order,text,...r})=>r),context:contextRef.current,autoHighlight:true,color:p.color});
  }
 
  function updateDrawVisual(e){
@@ -533,7 +570,7 @@ function AnnotationPalette({color,tool,setColor,setTool}){
   <button className={"annotation-tool "+(tool==="pen"?"active":"")} title="Stylo / dessin" onClick={()=>setTool("pen")}><PenLine size={16}/></button>
   <button className={"annotation-tool "+(tool==="eraser"?"active":"")} title="Gomme" onClick={()=>setTool("eraser")}><Eraser size={16}/></button>
   <button className="annotation-palette-button" title="Palette de couleurs" onClick={()=>setOpen(v=>!v)}><span style={{background:color}}/><Palette size={15}/></button>
-  {open&&<div className="annotation-palette">{colors.map(([rgba,solid])=><button key={rgba} className={color===rgba?"chosen":""} title="Couleur" onClick={()=>{setColor(rgba);setTool(tool==="eraser"?"highlight":tool);setOpen(false)}}><span style={{background:solid}}/></button>)}</div>}
+  {open&&<div className="annotation-palette">{colors.map(([rgba,solid])=><button key={rgba} className={color===rgba?"chosen":""} title="Choisir cette couleur de surlignage" onClick={()=>{setColor(rgba);setTool("highlight");setOpen(false)}}><span style={{background:solid}}/></button>)}</div>}
  </div>
 }
 
