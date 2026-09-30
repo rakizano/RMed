@@ -24,6 +24,28 @@ const jsonSchemas={
     },
     required:["type","front","back"]
   },
+  flashcard_batch:{
+    type:"OBJECT",
+    properties:{
+      cards:{
+        type:"ARRAY",
+        minItems:8,
+        maxItems:8,
+        items:{
+          type:"OBJECT",
+          properties:{
+            type:{type:"STRING"},
+            front:{type:"STRING"},
+            back:{type:"STRING"},
+            source:{type:"STRING"},
+            page:{type:"INTEGER",minimum:1}
+          },
+          required:["type","front","back","source","page"]
+        }
+      }
+    },
+    required:["cards"]
+  },
   explain:{
     type:"OBJECT",
     properties:{answer:{type:"STRING"}},
@@ -54,6 +76,7 @@ const jsonSchemas={
 
 function pickSchema(action){
   if(action==="qcm_session")return jsonSchemas.qcm_session;
+  if(action==="flashcard_batch")return jsonSchemas.flashcard_batch;
   if(action==="flashcard")return jsonSchemas.flashcard;
   return jsonSchemas.explain;
 }
@@ -65,6 +88,15 @@ function buildInstructions(action){
 Le recto doit tester le rappel du concept, pas recopier le cours.
 Le verso doit être précis et mémorisable.
 N'invente aucune information absente du passage.`;
+  }
+  if(action==="flashcard_batch"){
+    return `Tu es RMed, excellent professeur de PASS et créateur de flashcards.
+Crée EXACTEMENT 8 flashcards à partir UNIQUEMENT des ressources fournies.
+Chaque carte doit tester le rappel actif d'une notion précise, avec un recto sous forme de vraie question ou d'un texte à trous et un verso précis.
+Varie les notions et les formulations.
+Pour "source", indique le passage source le plus proche fourni dans le contexte.
+Pour "page", utilise le numéro de page indiqué dans les en-têtes de ressources.
+N'invente aucune information absente des ressources.`;
   }
   if(action==="qcm_session"){
     return `Tu es RMed, professeur de PASS et créateur de QCM.
@@ -184,6 +216,10 @@ export default async function handler(req,res){
         }
         if(isQcm&&(!Array.isArray(parsed.questions)||parsed.questions.length!==30)){
           lastError=new Error("Gemini n’a pas généré exactement 30 questions.");
+          continue;
+        }
+        if(isBatch&&(!Array.isArray(parsed.cards)||parsed.cards.length!==8)){
+          lastError=new Error("Gemini n’a pas généré exactement 8 flashcards.");
           continue;
         }
         return json(res,200,parsed);
