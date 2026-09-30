@@ -635,9 +635,10 @@ function DemoPage({pg,onSelection}){
  return <div className="demo-paper" ref={ref} onMouseUp={getSelection} onTouchEnd={getSelection}><small>PAGE {pg.n}</small><p>{pg.text}</p><p className="hint">Sélectionne un passage comme dans un vrai PDF pour créer une carte.</p></div>
 }
 
-function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,selection,focusHighlightId,clearFocus,onSelection,onCreateCard,onHighlightSelection,onExplainSelection,toolColor,setToolColor}){
+function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,selection,focusHighlightId,clearFocus,onSelection,onCreateCard=()=>{},onHighlightSelection=()=>{},onExplainSelection=()=>{},toolColor,setToolColor}){ 
  const pageRef=useRef(null),canvasRef=useRef(null),textRef=useRef(null),contextRef=useRef("");
- const penRef=useRef({active:false,pointerId:null,anchor:null});
+ const pointerRef=useRef({active:false,pointerId:null,anchor:null});
+ const panRef=useRef({active:false,pointerId:null,x:0,y:0});
  const[height,setHeight]=useState(800);
  const[tool,setTool]=useState("select");
 
@@ -672,8 +673,9 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,selection,focusHig
   const root=pageRef.current?.getBoundingClientRect();if(!root)return [];
   return [...range.getClientRects()].map(r=>({x:r.left-root.left,y:r.top-root.top,width:r.width,height:r.height})).filter(r=>r.width>1&&r.height>2);
  }
- function payloadFromSelection(s){
-  if(tool!=="select"||!s||s.isCollapsed||!textRef.current||!textRef.current.contains(s.anchorNode))return null;
+ function payloadFromSelection(s,allowHighlight=false){
+  if(!s||s.isCollapsed||!textRef.current||!textRef.current.contains(s.anchorNode))return null;
+  if(tool!=="select"&&!allowHighlight)return null;
   const text=s.toString().replace(/\s+/g," ").trim();if(!text)return null;
   const range=s.getRangeAt(0);
   return {text,rects:rects(range),context:contextRef.current,courseId,page:pageNumber};
@@ -685,56 +687,88 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,selection,focusHig
   }catch{}
   return null;
  }
- function finishSelection(){
-  const s=window.getSelection(),payload=payloadFromSelection(s);if(!payload)return;
-  onSelection(payload);s.removeAllRanges();
+ function readCurrentSelection(){
+  const s=window.getSelection();if(!s)return;
+  const payload=payloadFromSelection(s,tool==="highlight");
+  if(payload)onSelection(payload);
  }
- function penDown(e){
-  if(tool!=="select"||e.pointerType!=="pen"||!textRef.current?.contains(e.target))return;
-  const caret=caretAt(e.clientX,e.clientY);if(!caret)return;
-  e.preventDefault();e.stopPropagation();
-  penRef.current={active:true,pointerId:e.pointerId,anchor:{node:caret.startContainer,offset:caret.startOffset}};
-  try{pageRef.current.setPointerCapture(e.pointerId)}catch{}
- }
- function penMove(e){
-  const p=penRef.current;if(!p.active||p.pointerId!==e.pointerId)return;
+ function selectFromPointer(e){
+  const p=pointerRef.current;
+  if(!p.active||p.pointerId!==e.pointerId)return;
   e.preventDefault();e.stopPropagation();
   const caret=caretAt(e.clientX,e.clientY);if(!caret)return;
   const s=window.getSelection();if(!s)return;
   try{s.removeAllRanges();s.setBaseAndExtent(p.anchor.node,p.anchor.offset,caret.startContainer,caret.startOffset)}catch{}
  }
- function penUp(e){
-  const p=penRef.current;if(!p.active||p.pointerId!==e.pointerId)return;
-  e.preventDefault();e.stopPropagation();p.active=false;
-  try{pageRef.current.releasePointerCapture(e.pointerId)}catch{}
-  const s=window.getSelection(),payload=payloadFromSelection(s);if(!payload)return;
-  onSelection(payload);s.removeAllRanges();
+ function pointerStart(e){
+  if(tool!=="highlight")return;
+  if(e.pointerType==="mouse"&&e.button!==0)return;
+  if(!textRef.current?.contains(e.target))return;
+  const caret=caretAt(e.clientX,e.clientY);if(!caret)return;
+  e.preventDefault();e.stopPropagation();
+  pointerRef.current={active:true,pointerId:e.pointerId,anchor:{node:caret.startContainer,offset:caret.startOffset}};
+  try{pageRef.current?.setPointerCapture(e.pointerId)}catch{}
+ }
+ function pointerMove(e){
+  if(pointerRef.current.active){selectFromPointer(e);return}
+  const p=panRef.current;if(!p.active||p.pointerId!==e.pointerId)return;
+  e.preventDefault();
+  const stage=e.currentTarget;
+  stage.scrollLeft-=e.clientX-p.x;stage.scrollTop-=e.clientY-p.y;
+  p.x=e.clientX;p.y=e.clientY;
+ }
+ function pointerEnd(e){
+  const p=pointerRef.current;
+  if(p.active&&p.pointerId===e.pointerId){
+   e.preventDefault();e.stopPropagation();p.active=false;
+   try{pageRef.current?.releasePointerCapture(e.pointerId)}catch{}
+   const s=window.getSelection(),payload=payloadFromSelection(s,true);
+   if(payload){
+    onSelection(payload);
+    onHighlightSelection(payload);
+   }
+   return;
+  }
+  const pan=panRef.current;
+  if(pan.active&&pan.pointerId===e.pointerId){
+   pan.active=false;
+   try{e.currentTarget.releasePointerCapture(e.pointerId)}catch{}
+  }
+ }
+ function startPan(e){
+  if(tool!=="hand")return;
+  if(e.pointerType==="touch")return;
+  if(e.pointerType==="mouse"&&e.button!==0)return;
+  e.preventDefault();
+  panRef.current={active:true,pointerId:e.pointerId,x:e.clientX,y:e.clientY};
+  try{e.currentTarget.setPointerCapture(e.pointerId)}catch{}
  }
  useEffect(()=>{
-  document.addEventListener("pointerdown",penDown,true);
-  document.addEventListener("pointermove",penMove,true);
-  document.addEventListener("pointerup",penUp,true);
-  document.addEventListener("pointercancel",penUp,true);
-  return()=>{
-   document.removeEventListener("pointerdown",penDown,true);
-   document.removeEventListener("pointermove",penMove,true);
-   document.removeEventListener("pointerup",penUp,true);
-   document.removeEventListener("pointercancel",penUp,true);
-  };
- });
+  const onSelectionChange=()=>{if(tool==="select"||tool==="highlight")requestAnimationFrame(readCurrentSelection)};
+  document.addEventListener("selectionchange",onSelectionChange);
+  return()=>document.removeEventListener("selectionchange",onSelectionChange);
+ },[tool,pageNumber]);
+
+ useEffect(()=>{
+  if(tool!=="select"&&tool!=="highlight"){window.getSelection()?.removeAllRanges();onSelection?.(null)}
+ },[tool]);
 
  const selected=selection?.courseId===courseId&&Number(selection.page)===Number(pageNumber)?selection:null;
- return <div className={"pdf-stage "+(tool==="select"?"tool-select":"tool-hand")}>
+ return <div className={"pdf-stage "+(tool==="select"?"tool-select":tool==="highlight"?"tool-highlight":"tool-hand")}
+   onPointerDown={e=>{startPan(e);pointerStart(e)}}
+   onPointerMove={pointerMove}
+   onPointerUp={pointerEnd}
+   onPointerCancel={pointerEnd}>
   <div className="document-tool-palette">
    <button className={tool==="select"?"chosen":""} onClick={()=>setTool("select")} title="Sélectionner du texte"><MousePointer2 size={19}/></button>
    <button className={tool==="hand"?"chosen":""} onClick={()=>setTool("hand")} title="Déplacer le document"><Hand size={19}/></button>
    <span className="palette-divider"/>
-   <button className="palette-highlighter" title="Surlignage"><Highlighter size={18}/></button>
+   <button className={"palette-highlighter "+(tool==="highlight"?"chosen":"")} onClick={()=>setTool("highlight")} title="Surligner"><Highlighter size={18}/></button>
    <div className="palette-colors">
-    {["#ffe66d99","#ffd6a599","#c8f7b899","#cbd7ff99","#e9d0ff99"].map(c=><button key={c} className={toolColor===c?"color chosen-color":"color"} style={{background:c.replace("99","")}} onClick={()=>setToolColor(c)} aria-label="Couleur de surlignage"/>)}
+    {["#ffe66d99","#ffd6a599","#c8f7b899","#cbd7ff99","#e9d0ff99"].map(c=><button key={c} className={toolColor===c?"color chosen-color":"color"} style={{background:c.replace("99","")}} onClick={()=>{setTool("highlight");setToolColor?.(c)}} aria-label="Couleur de surlignage"/>)}
    </div>
   </div>
-  <div className="pdf-page" ref={pageRef} style={{height}} onMouseUp={finishSelection} onTouchEnd={()=>window.setTimeout(finishSelection,80)}>
+  <div className="pdf-page" ref={pageRef} style={{height}}>
    <canvas ref={canvasRef}/>
    <div className="pdf-highlights">{highlights.map(h=><div key={h.id} id={"hl-"+h.id} className="highlight-group">{(h.rects||[]).map((r,i)=><span key={i} style={{left:r.x,top:r.y,width:r.width,height:r.height,background:h.color||"#ffe66d99"}}/> )}</div>)}</div>
    <div className="pdf-text" ref={textRef}/>
@@ -742,7 +776,6 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,selection,focusHig
   </div>
  </div>
 }
-
 function ExternalPdfReader({courseId,initialPage=1}){
  const[courses]=useState(()=>load("rmed_courses",[demo]));
  const course=courses.find(c=>c.id===courseId);
