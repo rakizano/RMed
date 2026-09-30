@@ -1117,3 +1117,63 @@
 .pdf-stage.tool-highlight .pdf-highlights *{
   pointer-events:none!important;
 }
+
+
+/* iPhone / small-screen quick use: bottom navigation + touch-friendly study controls. */
+@media(max-width:620px){
+  .app aside{
+    position:fixed;
+    left:0;right:0;bottom:0;top:auto;
+    width:100%!important;
+    height:68px;
+    margin:0;
+    padding:6px 7px calc(6px + env(safe-area-inset-bottom))!important;
+    display:flex;
+    align-items:center;
+    gap:4px;
+    overflow-x:auto;
+    overflow-y:hidden;
+    z-index:100;
+    border-right:0;
+    border-top:1px solid #e3e5ec;
+    background:rgba(255,255,255,.97);
+    backdrop-filter:blur(16px);
+  }
+  .app aside .logo,
+  .app aside h2,
+  .app aside>small,
+  .app aside .dog{
+    display:none!important;
+  }
+  .app aside .nav{
+    flex:0 0 66px;
+    width:66px!important;
+    min-width:66px;
+    height:54px;
+    margin:0!important;
+    padding:5px 2px!important;
+    border-radius:10px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:3px;
+  }
+  .app aside .nav svg{width:19px;height:19px}
+  .app aside .nav span{display:block!important;font-size:9px!important;line-height:1.1}
+  main{
+    margin-left:0!important;
+    padding-bottom:82px!important;
+  }
+  .qcm-choices button{
+    min-height:54px!important;
+    padding:14px!important;
+    font-size:14px!important;
+  }
+  .levels button{
+    min-height:52px!important;
+  }
+  .reviewcard{
+    min-height:330px;
+  }
+}
