@@ -634,10 +634,11 @@ function DemoPage({pg,onSelection}){
  return <div className="demo-paper" ref={ref} onMouseUp={getSelection} onTouchEnd={getSelection}><small>PAGE {pg.n}</small><p>{pg.text}</p><p className="hint">Sélectionne un passage comme dans un vrai PDF pour créer une carte.</p></div>
 }
 
-function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus,onSelection}){
+function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,selection,focusHighlightId,clearFocus,onSelection,onCreateCard,onHighlightSelection,onExplainSelection,toolColor,setToolColor}){
  const pageRef=useRef(null),canvasRef=useRef(null),textRef=useRef(null),contextRef=useRef("");
  const penRef=useRef({active:false,pointerId:null,anchor:null});
  const[height,setHeight]=useState(800);
+ const[tool,setTool]=useState("select");
 
  useEffect(()=>{
   let cancelled=false;
@@ -660,7 +661,7 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,c
     const textDivs=[];await pdfjsLib.renderTextLayer({textContentSource:text,container:layer,viewport,textDivs}).promise;
     if(cancelled)return;
     layer.querySelectorAll("span").forEach(span=>span.classList.add("pdf-word"));
-    if(focusHighlightId){requestAnimationFrame(()=>{document.getElementById("hl-"+focusHighlightId)?.scrollIntoView({behavior:"smooth",block:"center"});clearFocus?.()})}
+    if(focusHighlightId)requestAnimationFrame(()=>{document.getElementById("hl-"+focusHighlightId)?.scrollIntoView({behavior:"smooth",block:"center"});clearFocus?.()});
    }catch(err){console.error("PDF render error",err)}
   }
   render();return()=>{cancelled=true};
@@ -670,6 +671,12 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,c
   const root=pageRef.current?.getBoundingClientRect();if(!root)return [];
   return [...range.getClientRects()].map(r=>({x:r.left-root.left,y:r.top-root.top,width:r.width,height:r.height})).filter(r=>r.width>1&&r.height>2);
  }
+ function payloadFromSelection(s){
+  if(tool!=="select"||!s||s.isCollapsed||!textRef.current||!textRef.current.contains(s.anchorNode))return null;
+  const text=s.toString().replace(/\s+/g," ").trim();if(!text)return null;
+  const range=s.getRangeAt(0);
+  return {text,rects:rects(range),context:contextRef.current,courseId,page:pageNumber};
+ }
  function caretAt(x,y){
   try{
    if(document.caretRangeFromPoint){const r=document.caretRangeFromPoint(x,y);if(r)return r}
@@ -678,15 +685,11 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,c
   return null;
  }
  function finishSelection(){
-  if(penRef.current.active)return;
-  const s=window.getSelection();if(!s||s.isCollapsed||!textRef.current)return;
-  if(!textRef.current.contains(s.anchorNode))return;
-  const text=s.toString().replace(/\s+/g," ").trim();if(!text)return;
-  onSelection({text,rects:rects(s.getRangeAt(0)),context:contextRef.current});
-  s.removeAllRanges();
+  const s=window.getSelection(),payload=payloadFromSelection(s);if(!payload)return;
+  onSelection(payload);s.removeAllRanges();
  }
  function penDown(e){
-  if(e.pointerType!=="pen"||!textRef.current?.contains(e.target))return;
+  if(tool!=="select"||e.pointerType!=="pen"||!textRef.current?.contains(e.target))return;
   const caret=caretAt(e.clientX,e.clientY);if(!caret)return;
   e.preventDefault();e.stopPropagation();
   penRef.current={active:true,pointerId:e.pointerId,anchor:{node:caret.startContainer,offset:caret.startOffset}};
@@ -703,10 +706,8 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,c
   const p=penRef.current;if(!p.active||p.pointerId!==e.pointerId)return;
   e.preventDefault();e.stopPropagation();p.active=false;
   try{pageRef.current.releasePointerCapture(e.pointerId)}catch{}
-  const s=window.getSelection();if(!s||s.isCollapsed)return;
-  const text=s.toString().replace(/\s+/g," ").trim();if(!text)return;
-  onSelection({text,rects:rects(s.getRangeAt(0)),context:contextRef.current});
-  s.removeAllRanges();
+  const s=window.getSelection(),payload=payloadFromSelection(s);if(!payload)return;
+  onSelection(payload);s.removeAllRanges();
  }
  useEffect(()=>{
   document.addEventListener("pointerdown",penDown,true);
@@ -720,11 +721,23 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,c
    document.removeEventListener("pointercancel",penUp,true);
   };
  });
- return <div className="pdf-stage">
+
+ const selected=selection?.courseId===courseId&&Number(selection.page)===Number(pageNumber)?selection:null;
+ return <div className={"pdf-stage "+(tool==="select"?"tool-select":"tool-hand")}>
+  <div className="document-tool-palette">
+   <button className={tool==="select"?"chosen":""} onClick={()=>setTool("select")} title="Sélectionner du texte"><MousePointer2 size={19}/></button>
+   <button className={tool==="hand"?"chosen":""} onClick={()=>setTool("hand")} title="Déplacer le document"><Hand size={19}/></button>
+   <span className="palette-divider"/>
+   <button className="palette-highlighter" title="Surlignage"><Highlighter size={18}/></button>
+   <div className="palette-colors">
+    {["#ffe66d99","#ffd6a599","#c8f7b899","#cbd7ff99","#e9d0ff99"].map(c=><button key={c} className={toolColor===c?"color chosen-color":"color"} style={{background:c.replace("99","")}} onClick={()=>setToolColor(c)} aria-label="Couleur de surlignage"/>)}
+   </div>
+  </div>
   <div className="pdf-page" ref={pageRef} style={{height}} onMouseUp={finishSelection} onTouchEnd={()=>window.setTimeout(finishSelection,80)}>
    <canvas ref={canvasRef}/>
    <div className="pdf-highlights">{highlights.map(h=><div key={h.id} id={"hl-"+h.id} className="highlight-group">{(h.rects||[]).map((r,i)=><span key={i} style={{left:r.x,top:r.y,width:r.width,height:r.height,background:h.color||"#ffe66d99"}}/> )}</div>)}</div>
    <div className="pdf-text" ref={textRef}/>
+   {selected&&<SelectionBar sel={selected} onCreate={()=>onCreateCard(selected)} onHighlight={()=>onHighlightSelection(selected)} onExplain={()=>onExplainSelection(selected)}/>}
   </div>
  </div>
 }
