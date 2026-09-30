@@ -486,7 +486,7 @@ function App(){
    <header><b className="mobile">RMed</b><div className="search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher…"/></div><div className="avatar">R</div></header>
 
    {tab==="home"&&<Home cards={cards} due={due.length} courses={courses} nav={nav} open={open}/>}
-   {tab==="course"&&<Course openUpload={()=>setUploadOpen(true)} course={course} pageNumber={pageNumber} setPageNumber={setPageNumber} pdfDoc={pdfDoc} pdfNativeUrl={pdfNativeUrl} pdfLoading={pdfLoading} pdfError={pdfError} zoom={zoom} setZoom={setZoom} sel={sel} onSelection={onSelection} openCreator={openCreator} highlights={highlights.filter(h=>h.courseId===course.id&&h.page===pageNumber)} focusHighlightId={focusHighlightId} clearFocus={()=>setFocusHighlightId(null)} importPdf={file=>addPdf(file,activeFolderId)} courses={courses} folders={folders} activeFolderId={activeFolderId} setActiveFolderId={setActiveFolderId} onCreateFolder={createFolder} open={open} onAskAI={()=>setAiOpen(true)} onReviewCourse={()=>navReview("course",course.id)} onReviewFolder={()=>activeFolderId&&navReview("folder",activeFolderId)} onMoveCourse={()=>setMoveCourseId(course.id)} onMoveCourseId={id=>setMoveCourseId(id)}/>}
+   {tab==="course"&&<Course openUpload={()=>setUploadOpen(true)} course={course} pageNumber={pageNumber} setPageNumber={setPageNumber} pdfDoc={pdfDoc} pdfNativeUrl={pdfNativeUrl} pdfLoading={pdfLoading} pdfError={pdfError} zoom={zoom} setZoom={setZoom} sel={sel} onSelection={onSelection} openCreator={openCreator} highlights={highlights.filter(h=>h.courseId===course.id&&h.page===pageNumber)} focusHighlightId={focusHighlightId} clearFocus={()=>setFocusHighlightId(null)} importPdf={file=>addPdf(file,activeFolderId)} courses={courses} folders={folders} activeFolderId={activeFolderId} setActiveFolderId={setActiveFolderId} onCreateFolder={createFolder} open={open} onAskAI={()=>setAiOpen(true)} onReviewCourse={()=>navReview("course",course.id)} onReviewFolder={()=>activeFolderId&&navReview("folder",activeFolderId)} onMoveCourse={()=>setMoveCourseId(course.id)} onMoveCourseId={(id,folderId)=>folderId?moveCourseToFolder(id,folderId):setMoveCourseId(id)}/>}
    {tab==="cards"&&<Cards cards={cards} search={search} open={openCardSource} del={deleteCard} edit={editCard} courses={courses} folders={folders} onReviewCourse={id=>navReview("course",id)}/>}
    {tab==="review"&&<Review rc={rc} revealed={revealed} setRevealed={setRevealed} rate={rate} total={due.length} i={ri} courses={courses} folders={folders} course={course} activeFolderId={activeFolderId} scope={reviewScope} setScope={s=>{setReviewScope(s);setRi(0);setRevealed(false)}} onReviewAll={()=>navReview("all",null)}/>} 
    {tab==="qcm"&&<QCM courses={courses} course={course} cards={cards} qcm={qcm} setQcm={setQcm}/>}
@@ -565,9 +565,9 @@ function Course({course,pageNumber,setPageNumber,pdfDoc,pdfNativeUrl,pdfLoading,
        <button className="course-file-main" onClick={()=>open(c)}>
         <div className="course-file-icon"><FileText/></div>
         <div className="course-file-body"><b>{c.title}</b><small>{c.pages.length} page(s){c.kind==="pdf"?" • PDF":" • Démo"}</small></div>
-        <button className="course-file-move" onClick={e=>{e.stopPropagation();onMoveCourseId?.(c.id)}} title="Ranger ce cours"><Folder size={15}/></button>
         <ChevronRight size={17}/>
        </button>
+       <button className="course-file-move" onClick={e=>{e.stopPropagation();onMoveCourseId?.(c.id)}} title="Ranger ce cours"><Folder size={15}/></button>
       </div>
      )}</div>:<div className="library-empty">Aucun cours ici. Ajoute un PDF ou crée un dossier.</div>}
    </div>
