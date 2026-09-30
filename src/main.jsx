@@ -365,3 +365,6 @@ function PDFPage({pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus
    <div className="pdf-text" ref={textRef}/>
  </div></div>
 }
+
+
+createRoot(document.getElementById("root")).render(<App/>);
