@@ -50,6 +50,30 @@ const uid=()=>{
  try{return window.crypto?.randomUUID?.()||String(Date.now())+Math.random().toString(16).slice(2)}
  catch{return String(Date.now())+Math.random().toString(16).slice(2)}
 };
+
+async function prepareCardImage(file){
+ return await new Promise((resolve,reject)=>{
+  if(!file||!file.type?.startsWith("image/")){reject(new Error("Fichier image invalide."));return}
+  const reader=new FileReader();
+  reader.onload=()=>{
+   const img=new Image();
+   img.onload=()=>{
+    const max=1400;
+    const ratio=Math.min(1,max/Math.max(img.naturalWidth||img.width,img.naturalHeight||img.height));
+    const canvas=document.createElement("canvas");
+    canvas.width=Math.max(1,Math.round((img.naturalWidth||img.width)*ratio));
+    canvas.height=Math.max(1,Math.round((img.naturalHeight||img.height)*ratio));
+    const ctx=canvas.getContext("2d");
+    ctx.drawImage(img,0,0,canvas.width,canvas.height);
+    resolve(canvas.toDataURL("image/webp",.82));
+   };
+   img.onerror=()=>reject(new Error("Impossible de lire l’image."));
+   img.src=reader.result;
+  };
+  reader.onerror=()=>reject(reader.error||new Error("Impossible de lire l’image."));
+  reader.readAsDataURL(file);
+ });
+}
 let pdfjsPromise=null;
 async function getPdfjs(){
  if(!pdfjsPromise)pdfjsPromise=import("pdfjs-dist");
@@ -434,7 +458,7 @@ function App(){
  async function openCreator(selection=sel){
    if(!selection?.text?.trim())return;
    const hId=selection.highlightId||persistSelection(selection,highlightColor);
-   setDraft({type:"basic",front:"",back:"",highlightId:hId,source:selection.text,page:pageNumber,aiGenerating:true,aiError:""});
+   setDraft({type:"basic",front:"",back:"",images:[],highlightId:hId,source:selection.text,page:pageNumber,aiGenerating:true,aiError:""});
    setModal(true);
    try{
     const aiContext=await getSelectionAIContext(selection);
@@ -468,17 +492,17 @@ function App(){
  function saveCard(){
    if(!draft?.front?.trim()||!draft?.back?.trim())return;
    if(draft.editingId){
-    setCards(x=>x.map(c=>c.id===draft.editingId?{...c,front:draft.front.trim(),back:draft.back.trim(),type:draft.type||c.type||"basic"}:c));
+    setCards(x=>x.map(c=>c.id===draft.editingId?{...c,front:draft.front.trim(),back:draft.back.trim(),images:draft.images||[],type:draft.type||c.type||"basic"}:c));
    }else{
     const hId=draft.highlightId;
-    setCards(x=>[...x,{id:uid(),courseId:course.id,pageId:(course.pages.find(x=>x.n===Number(draft.page||pageNumber))||currentPage()).id,page:Number(draft.page||pageNumber),highlightId:hId,source:draft.source||draft.back,type:"basic",front:draft.front.trim(),back:draft.back.trim(),level:null,next:Date.now(),created:Date.now()}]);
+    setCards(x=>[...x,{id:uid(),courseId:course.id,pageId:(course.pages.find(x=>x.n===Number(draft.page||pageNumber))||currentPage()).id,page:Number(draft.page||pageNumber),highlightId:hId,source:draft.source||draft.back,images:draft.images||[],type:"basic",front:draft.front.trim(),back:draft.back.trim(),level:null,next:Date.now(),created:Date.now()}]);
    }
    setModal(false);setDraft(null);setSel(null);
  }
  
  function deleteCard(id){setCards(x=>x.filter(c=>c.id!==id))}
  function editCard(c){
-   setDraft({editingId:c.id,type:c.type||"basic",front:c.front,back:c.back,source:c.source||"",page:c.page,highlightId:c.highlightId});
+   setDraft({editingId:c.id,type:c.type||"basic",front:c.front,back:c.back,images:c.images||[],source:c.source||"",page:c.page,highlightId:c.highlightId});
    setModal(true);
  }
  function rate(level){
@@ -976,6 +1000,22 @@ function ExplainSelectionModal({selection,course,getContext,onClose}){
 
 function CardModal({draft,setDraft,onClose,onSave}){
  const[busy,setBusy]=useState(false);
+ const[imageBusy,setImageBusy]=useState(false);
+ async function addImages(e){
+  const files=[...(e.target.files||[])];
+  e.target.value="";
+  if(!files.length)return;
+  setImageBusy(true);
+  try{
+   const added=[];
+   for(const file of files.slice(0,6))added.push(await prepareCardImage(file));
+   setDraft(x=>x?{...x,images:[...(x.images||[]),...added].slice(0,6)}:x);
+  }catch(err){setDraft(x=>x?{...x,aiError:err?.message||"Impossible d’ajouter l’image."}:x)}
+  finally{setImageBusy(false)}
+ }
+ function removeImage(index){
+  setDraft(x=>x?{...x,images:(x.images||[]).filter((_,i)=>i!==index)}:x);
+ }
  async function regenerate(){
   if(!draft?.source||busy)return;
   setBusy(true);setDraft(x=>x?{...x,aiGenerating:true,aiError:""}:x);
@@ -994,6 +1034,12 @@ function CardModal({draft,setDraft,onClose,onSave}){
    {draft?.aiError&&<div className="ai-error">{draft.aiError}</div>}
    <label>Recto<textarea rows="3" value={draft?.front||""} onChange={e=>setDraft(x=>({...x,front:e.target.value,aiError:""}))} placeholder="Question"/></label>
    <label>Verso<textarea rows="4" value={draft?.back||""} onChange={e=>setDraft(x=>({...x,back:e.target.value,aiError:""}))} placeholder="Réponse"/></label>
+   <div className="card-image-editor">
+    <div className="card-image-editor-head"><div><b>🖼️ Images</b><small>Ajoute des images depuis ta galerie à cette flashcard.</small></div>
+     <label className="image-picker-button">{imageBusy?"Ajout…":"Ajouter une image"}<input type="file" accept="image/*" multiple onChange={addImages} disabled={imageBusy}/></label>
+    </div>
+    {!!draft?.images?.length&&<div className="card-image-grid">{draft.images.map((src,i)=><div className="card-image-item" key={src+i}><img src={src} alt="" /><button type="button" onClick={()=>removeImage(i)} title="Supprimer">×</button></div>)}</div>}
+   </div>
    <div className="actions"><button onClick={onClose}>Annuler</button><button className="primary" onClick={onSave} disabled={!draft?.front?.trim()||!draft?.back?.trim()}>Enregistrer</button></div>
   </div>
  </div>
@@ -1012,7 +1058,7 @@ function Cards({cards,search,open,del,edit,courses,folders,onReviewCourse}){
       <div className="cards-library">{courseCards.map(c=><article className="flashcard-row" key={c.id}>
     <div className="flashcard-type">{c.type==="cloze"?"🧩":c.type==="concept"?"💡":"❓"}</div>
     <div className="flashcard-content">
-      <div className="flashcard-side"><small>RECTO</small><strong>{c.front}</strong></div>
+      <div className="flashcard-side"><small>RECTO</small><strong>{c.front}</strong>{!!c.images?.length&&<div className="flashcard-thumbnails">{c.images.map((src,i)=><img key={i} src={src} alt="" />)}</div>}</div>
       <div className="flashcard-divider"/>
       <div className="flashcard-side back"><small>VERSO</small><p>{c.back}</p></div>
       <div className="flashcard-meta">Page {c.page} • {c.level||"À réviser"}</div>
@@ -1047,7 +1093,7 @@ function Review({rc,revealed,setRevealed,rate,total,i,courses,folders,course,act
  if(!rc)return <div className="page review"><div className="title"><div><small>RÉVISION ACTIVE</small><h1>Réviser</h1></div><span className="pill">0 carte</span></div><div className="panel empty"><div className="review-scope-bar"><b>Périmètre</b><button className={scope.type==="all"?"chosen":""} onClick={onReviewAll}>Toute la bibliothèque</button>{activeFolderId&&<button className={scope.type==="folder"?"chosen":""} onClick={()=>setScope({type:"folder",id:activeFolderId})}>{currentFolderName}</button>} {course?.id&&<button className={scope.type==="course"?"chosen":""} onClick={()=>setScope({type:"course",id:course.id})}>{currentCourseName}</button>}</div><Brain size={40}/><h2>Tout est à jour 🎉</h2><p>Aucune carte à réviser dans ce périmètre.</p></div></div>;
  return <div className="page review"><div className="title"><div><small>RÉVISION ACTIVE</small><h1>Réviser</h1></div><span className="pill">{Math.min(i+1,total)}/{total}</span></div>
   <div className="review-scope-bar"><b>Périmètre</b><button className={scope.type==="all"?"chosen":""} onClick={onReviewAll}>Toute la bibliothèque</button>{activeFolderId&&<button className={scope.type==="folder"?"chosen":""} onClick={()=>setScope({type:"folder",id:activeFolderId})}>{currentFolderName}</button>} {course?.id&&<button className={scope.type==="course"?"chosen":""} onClick={()=>setScope({type:"course",id:course.id})}>{currentCourseName}</button>}</div>
-  <div className="reviewcard"><small>{rc.type==="cloze"?"TEXTE À TROUS":"QUESTION"}</small><h2>{rc.front}</h2>{revealed?<><div className="answer">{rc.back}</div>
+  <div className="reviewcard"><small>{rc.type==="cloze"?"TEXTE À TROUS":"QUESTION"}</small><h2>{rc.front}</h2>{!!rc.images?.length&&<div className="review-card-images">{rc.images.map((src,i)=><img key={i} src={src} alt="" />)}</div>}{revealed?<><div className="answer">{rc.back}</div>
    <button className="ai-help-button" onClick={explain} disabled={helpBusy}>🧠 {helpBusy?"RMed explique…":"Je n’ai pas compris → explique-moi autrement"}</button>
    {helpError&&<div className="ai-error">{helpError}</div>}
    {help&&<div className="review-ai-help"><small>RMed t’aide à comprendre</small><div>{help}</div></div>}
