@@ -2,6 +2,7 @@ import React,{useEffect,useMemo,useRef,useState}from"react";
 import{createRoot}from"react-dom/client";
 import{BookOpen,Brain,ChevronLeft,ChevronRight,Clock3,FileText,History,Home as HomeIcon,ListChecks,Minus,Plus,Search,Sparkles,Target,Trash2,Upload,X,Highlighter}from"lucide-react";
 import*as pdfjsLib from"pdfjs-dist/legacy/build/pdf.mjs";
+import workerUrl from"pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 import"./styles.css";
 
 
@@ -13,7 +14,8 @@ const demo={id:"demo",title:"Mitose — cours de démonstration",kind:"demo",pag
 const levels=[["again","🔴","Pas du tout",10],["hard","🟠","Difficile",1440],["medium","🟡","Moyen",4320],["good","🟢","Bien acquis",10080],["perfect","🔵","Parfait",30240]];
 const load=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}};
 const uid=()=>crypto.randomUUID?.()||String(Date.now())+Math.random().toString(16).slice(2);
-async function openPdfDocument(data){const source=data instanceof ArrayBuffer?data.slice(0):data;const bytes=source instanceof Uint8Array?new Uint8Array(source):new Uint8Array(source);return await pdfjsLib.getDocument({data:bytes.slice(0),disableWorker:true,isEvalSupported:false,useSystemFonts:true,verbosity:0}).promise}
+pdfjsLib.GlobalWorkerOptions.workerSrc=workerUrl;
+async function openPdfDocument(data){const source=data instanceof ArrayBuffer?data.slice(0):data;const bytes=source instanceof Uint8Array?new Uint8Array(source):new Uint8Array(source);return await pdfjsLib.getDocument({data:bytes.slice(0),isEvalSupported:false,useSystemFonts:true,verbosity:0}).promise}
 
 const dbPromise=typeof indexedDB==="undefined"?Promise.resolve(null):new Promise((resolve,reject)=>{
  const req=indexedDB.open("rmed-files",1);
