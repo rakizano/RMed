@@ -1,6 +1,7 @@
 import React,{useEffect,useMemo,useRef,useState}from"react";
 import{createRoot}from"react-dom/client";
 import{BookOpen,Brain,ChevronLeft,ChevronRight,Clock3,FileText,History,Home as HomeIcon,ListChecks,Minus,Plus,Search,Sparkles,Target,Trash2,Upload,X,Highlighter,Lock,Unlock,Palette,PenLine,Eraser,ExternalLink,ArrowLeft}from"lucide-react";
+import pdfWorkerUrl from"pdfjs-dist/build/pdf.worker.min.js?url";
 import"./styles.css";
 
 
@@ -24,32 +25,16 @@ const uid=()=>{
  catch{return String(Date.now())+Math.random().toString(16).slice(2)}
 };
 let pdfjsPromise=null;
-let pdfWorkerPromise=null;
-function isAppleMobile(){
- const ua=navigator.userAgent||"";
- return /iPad|iPhone|iPod/i.test(ua)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
-}
 async function getPdfjs(){
  if(!pdfjsPromise)pdfjsPromise=import("pdfjs-dist");
  return pdfjsPromise;
 }
-async function getPdfWorkerSrc(){
- if(!pdfWorkerPromise){
-  pdfWorkerPromise=import("pdfjs-dist/build/pdf.worker.min.js?url").then(m=>m.default);
- }
- return pdfWorkerPromise;
-}
 async function openPdfDocument(data){
  const pdfjsLib=await getPdfjs();
- const workerSrc=await getPdfWorkerSrc();
- pdfjsLib.GlobalWorkerOptions.workerSrc=workerSrc;
+ pdfjsLib.GlobalWorkerOptions.workerSrc=pdfWorkerUrl;
  const source=data instanceof ArrayBuffer?data.slice(0):data;
  const bytes=source instanceof Uint8Array?new Uint8Array(source):new Uint8Array(source);
- const options={data:bytes.slice(0),isEvalSupported:false,useSystemFonts:true,verbosity:0};
- // Keep the worker URL configured even on iPad/iPhone. This avoids the recurring
- // "GlobalWorkerOptions.workerSrc" failure while remaining compatible with Safari.
- if(isAppleMobile())options.disableWorker=false;
- return await pdfjsLib.getDocument(options).promise;
+ return await pdfjsLib.getDocument({data:bytes.slice(0),isEvalSupported:false,useSystemFonts:true,verbosity:0}).promise;
 }
 
 const dbPromise=(()=>{
@@ -214,6 +199,14 @@ function App(){
    return h.id;
  }
 
+ function eraseHighlight(id){
+ if(!id)return;
+ setHighlights(x=>x.filter(h=>h.id!==id));
+ setCards(x=>x.filter(c=>c.highlightId!==id));
+ setSel(current=>current?.highlightId===id?null:current);
+ setSuggestions([]);
+}
+
  function makeSuggestions(selection){
    const text=selection.text.trim();
    const ctx=selection.context?.trim()||text;
@@ -249,16 +242,25 @@ function App(){
 
  function saveCard(){
    if(!draft?.front?.trim()||!draft?.back?.trim())return;
-   const hId=draft.highlightId;
-   setCards(x=>[...x,{
+   if(draft.editingId){
+    setCards(x=>x.map(c=>c.id===draft.editingId?{...c,front:draft.front.trim(),back:draft.back.trim(),type:draft.type||c.type||"basic"}:c));
+   }else{
+    const hId=draft.highlightId;
+    setCards(x=>[...x,{
      id:uid(),courseId:course.id,pageId:currentPage().id,page:pageNumber,highlightId:hId,
      source:draft.source||draft.back,type:draft.type||"basic",front:draft.front.trim(),back:draft.back.trim(),
      level:null,next:Date.now(),created:Date.now()
-   }]);
+    }]);
+   }
    setModal(false);setDraft(null);setSuggestions([]);setSel(null);
  }
 
  function deleteCard(id){setCards(x=>x.filter(c=>c.id!==id))}
+ function editCard(c){
+   setDraft({editingId:c.id,type:c.type||"basic",front:c.front,back:c.back,source:c.source||"",page:c.page,highlightId:c.highlightId});
+   setSuggestions([]);
+   setModal(true);
+ }
  function rate(level){
    if(!rc)return;
    const mins=levels.find(x=>x[0]===level)[3];
@@ -289,8 +291,8 @@ function App(){
    <header><b className="mobile">RMed</b><div className="search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher…"/></div><div className="avatar">R</div></header>
 
    {tab==="home"&&<Home cards={cards} due={due.length} courses={courses} nav={nav} open={open}/>}
-   {tab==="course"&&<Course openUpload={()=>setUploadOpen(true)} course={course} pageNumber={pageNumber} setPageNumber={setPageNumber} pdfDoc={pdfDoc} pdfNativeUrl={pdfNativeUrl} pdfLoading={pdfLoading} pdfError={pdfError} zoom={zoom} setZoom={setZoom} sel={sel} suggestions={suggestions} onSelection={onSelection} openCreator={openCreator} applySuggestion={applySuggestion} pdfLocked={pdfLocked} setPdfLocked={setPdfLocked} highlights={highlights.filter(h=>h.courseId===course.id&&h.page===pageNumber)} focusHighlightId={focusHighlightId} clearFocus={()=>setFocusHighlightId(null)} importPdf={importPdf} courses={courses} open={open}/>}
-   {tab==="cards"&&<Cards cards={cards} search={search} open={openCardSource} del={deleteCard}/>}
+   {tab==="course"&&<Course openUpload={()=>setUploadOpen(true)} course={course} pageNumber={pageNumber} setPageNumber={setPageNumber} pdfDoc={pdfDoc} pdfNativeUrl={pdfNativeUrl} pdfLoading={pdfLoading} pdfError={pdfError} zoom={zoom} setZoom={setZoom} sel={sel} suggestions={suggestions} onSelection={onSelection} openCreator={openCreator} applySuggestion={applySuggestion} pdfLocked={pdfLocked} setPdfLocked={setPdfLocked} highlights={highlights.filter(h=>h.courseId===course.id&&h.page===pageNumber)} focusHighlightId={focusHighlightId} clearFocus={()=>setFocusHighlightId(null)} importPdf={importPdf} courses={courses} open={open} onEraseHighlight={eraseHighlight}/>}
+   {tab==="cards"&&<Cards cards={cards} search={search} open={openCardSource} del={deleteCard} edit={editCard}/>}
    {tab==="review"&&<Review rc={rc} revealed={revealed} setRevealed={setRevealed} rate={rate} total={due.length} i={ri}/>}
    {tab==="qcm"&&<QCM cards={cards} qcm={qcm} setQcm={setQcm}/>}
    {tab==="history"&&<HistoryPage h={history}/>}
@@ -306,7 +308,7 @@ function Nav({icon,t,a,f}){return <button className={a?"nav active":"nav"} onCli
 function Home({cards,due,courses,nav,open}){return <div className="page"><section className="hero"><div><small>TON ESPACE DE RÉVISION</small><h1>Travaille ton cours au moment où tu le lis.</h1><p>Surligne → crée ta flashcard → garde le lien vers le passage exact → révise.</p><button className="primary" onClick={()=>nav("course")}>Ouvrir un cours <ChevronRight/></button></div><div className="bigdog">🐶</div></section><div className="stats"><Stat n={courses.length} t="Cours"/><Stat n={cards.length} t="Flashcards"/><Stat n={due} t="À réviser"/><Stat n={cards.filter(c=>c.level==="perfect"||c.level==="good").length} t="Bien acquis"/></div><div className="grid"><section className="panel"><h3>Continuer</h3>{courses.map(c=><button className="course" key={c.id} onClick={()=>open(c)}><FileText/><div><b>{c.title}</b><small>{c.pages.length} page(s){c.kind==="pdf"?" • PDF réel":""}</small></div><ChevronRight/></button>)}</section><section className="panel"><h3>Actions rapides</h3><div className="quick"><button onClick={()=>nav("review")}><Brain/>Réviser</button><button onClick={()=>nav("qcm")}><ListChecks/>Faire un QCM</button><button onClick={()=>nav("cards")}><Target/>Mes flashcards</button></div></section></div></div>}
 function Stat({n,t}){return <div className="stat"><strong>{n}</strong><span>{t}</span></div>}
 
-function Course({course,pageNumber,setPageNumber,pdfDoc,pdfNativeUrl,pdfLoading,pdfError,zoom,setZoom,sel,suggestions,onSelection,openCreator,applySuggestion,pdfLocked,setPdfLocked,highlights,focusHighlightId,clearFocus,importPdf,courses,open,openUpload}){
+function Course({course,pageNumber,setPageNumber,pdfDoc,pdfNativeUrl,pdfLoading,pdfError,zoom,setZoom,sel,suggestions,onSelection,openCreator,applySuggestion,pdfLocked,setPdfLocked,highlights,focusHighlightId,clearFocus,importPdf,courses,open,openUpload,onEraseHighlight}){
  const pg=course.pages.find(x=>x.n===pageNumber)||course.pages[0];
  const[markColor,setMarkColor]=useState("#ffe66d99");
  const[markTool,setMarkTool]=useState("highlight");
@@ -323,7 +325,7 @@ function Course({course,pageNumber,setPageNumber,pdfDoc,pdfNativeUrl,pdfLoading,
    <div className="pdf-toolbar"><button className={"tool-label "+(pdfLocked?"locked":"")} onClick={()=>setPdfLocked(v=>!v)} title={pdfLocked?"Déverrouiller le déplacement du PDF":"Verrouiller le déplacement du PDF"}>{pdfLocked?<Lock/>:<Unlock/>}<span>{pdfLocked?"PDF verrouillé":"Verrouiller PDF"}</span></button><button onClick={prev} disabled={pageNumber<=1}><ChevronLeft/></button><span>Page <b>{pageNumber}</b> / {course.pages.length}</span><button onClick={next} disabled={pageNumber>=course.pages.length}><ChevronRight/></button><button className="external-reader-button" onClick={()=>window.open(window.location.pathname+"?reader="+encodeURIComponent(course.id)+"&page="+pageNumber,"_blank")} title="Ouvrir le PDF dans le lecteur externe"><ExternalLink size={16}/><span>Lecteur PDF</span></button><AnnotationPalette color={markColor} tool={markTool} setColor={setMarkColor} setTool={setMarkTool}/><span className="spacer"/><button onClick={()=>setZoom(z=>Math.max(.75,z-.1))}><Minus/></button><span>{Math.round(zoom*100)}%</span><button onClick={()=>setZoom(z=>Math.min(2.5,z+.1))}><Plus/></button></div>
    {pdfLoading&&<div className="pdf-state">Ouverture du PDF…</div>}
    {pdfError&&<div className="pdf-state pdf-error"><b>Impossible d’ouvrir ce PDF</b><br/>{pdfError}<br/><button className="primary" onClick={openUpload}>Réimporter le PDF</button></div>}
-   {!pdfLoading&&!pdfError ? (course.kind==="pdf" ? (pdfNativeUrl&&isAppleMobile() ? <iframe className="native-pdf" title="PDF" src={pdfNativeUrl}/> : pdfDoc ? <PDFPage courseId={course.id} pdfDoc={pdfDoc} pageNumber={pageNumber} scale={zoom} highlights={highlights} focusHighlightId={focusHighlightId} clearFocus={clearFocus} onSelection={onSelection} locked={pdfLocked} markTool={markTool} markColor={markColor}/> : <div className="pdf-state">Préparation du PDF…</div>) : course.kind==="demo" ? <DemoPage pg={pg} onSelection={onSelection}/> : <div className="pdf-state">PDF indisponible. Réimporte-le pour continuer.</div>) : null}
+   {!pdfLoading&&!pdfError ? (course.kind==="pdf" ? (pdfNativeUrl&&isAppleMobile() ? <iframe className="native-pdf" title="PDF" src={pdfNativeUrl}/> : pdfDoc ? <PDFPage courseId={course.id} pdfDoc={pdfDoc} pageNumber={pageNumber} scale={zoom} highlights={highlights} focusHighlightId={focusHighlightId} clearFocus={clearFocus} onSelection={onSelection} locked={pdfLocked} markTool={markTool} markColor={markColor} onEraseHighlight={onEraseHighlight}/> : <div className="pdf-state">Préparation du PDF…</div>) : course.kind==="demo" ? <DemoPage pg={pg} onSelection={onSelection}/> : <div className="pdf-state">PDF indisponible. Réimporte-le pour continuer.</div>) : null}
    {sel&&<SelectionBar sel={sel} suggestions={suggestions} onHighlight={()=>{}} onCreate={()=>openCreator(sel)} onUse={applySuggestion}/>}
   </section>
  </div></div>
@@ -340,7 +342,7 @@ function DemoPage({pg,onSelection}){
  return <div className="demo-paper" ref={ref} onMouseUp={getSelection} onTouchEnd={getSelection}><small>PAGE {pg.n}</small><p>{pg.text}</p><p className="hint">Sélectionne un passage comme dans un vrai PDF pour créer une carte.</p></div>
 }
 
-function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus,onSelection,locked,markTool,markColor,onPinchZoom}){
+function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus,onSelection,locked,markTool,markColor,onPinchZoom,onEraseHighlight}){
  const pageRef=useRef(null),canvasRef=useRef(null),textRef=useRef(null),contextRef=useRef("");
  const penRef=useRef({active:false,points:[],pointerId:null,scrollLeft:0,scrollTop:0,stage:null,start:null,mode:"highlight",color:"#ffe66d99",raf:null});
  const touchRef=useRef(new Map());
@@ -498,12 +500,17 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,c
  function rectsFromRange(range){
   const root=pageRef.current?.getBoundingClientRect();
   if(!root||!range)return [];
-  return [...range.getClientRects()].map(r=>({
-   x:r.left-root.left,
-   y:r.top-root.top,
-   width:r.width,
-   height:r.height
-  })).filter(r=>r.width>1&&r.height>1);
+  const words=[...textRef.current?.children||[]];
+  const rects=[];
+  for(const word of words){
+   try{
+    if(!range.intersectsNode(word))continue;
+    const r=word.getBoundingClientRect();
+    if(r.width>1&&r.height>1)rects.push({x:r.left-root.left,y:r.top-root.top,width:r.width,height:r.height});
+   }catch{}
+  }
+  if(rects.length)return rects;
+  return [...range.getClientRects()].map(r=>({x:r.left-root.left,y:r.top-root.top,width:r.width,height:r.height})).filter(r=>r.width>1&&r.height>1);
  }
 
  function updateLiveHighlight(){
@@ -658,6 +665,8 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,c
    }
    return true;
   }));
+  const hit=highlights.find(h=>(h.rects||[]).some(r=>x>=r.x-18&&x<=r.x+r.width+18&&y>=r.y-18&&y<=r.y+r.height+18));
+  if(hit)onEraseHighlight?.(hit.id);
  }
 
  function touchStart(e){
@@ -772,6 +781,11 @@ function ExternalPdfReader({courseId,initialPage=1}){
   return()=>{window.removeEventListener("storage",onStorage);bc?.close()};
  },[]);
 
+ function eraseExternalHighlight(id){
+  if(!id)return;
+  setHighlights(x=>x.filter(h=>h.id!==id));
+  setSel(current=>current?.highlightId===id?null:current);
+ }
  function addExternalHighlight(selection){
   if(!selection?.text||!course)return;
   const pg=course.pages.find(x=>x.n===pageNumber)||{id:course.id+"-p"+pageNumber,n:pageNumber};
@@ -803,7 +817,7 @@ function ExternalPdfReader({courseId,initialPage=1}){
   {error&&<div className="external-reader-state"><b>Impossible d’ouvrir le PDF</b><p>{error}</p></div>}
   {!loading&&!error&&pdfDoc&&<div className="external-reader-viewport">
     <div className="external-reader-page-wrap">
-      <PDFPage courseId={course.id} pdfDoc={pdfDoc} pageNumber={pageNumber} scale={zoom} highlights={highlights.filter(h=>h.courseId===course.id&&h.page===pageNumber)} focusHighlightId={null} clearFocus={()=>{}} onSelection={addExternalHighlight} locked={locked} markTool={markTool} markColor={markColor} onPinchZoom={setZoom}/>
+      <PDFPage courseId={course.id} pdfDoc={pdfDoc} pageNumber={pageNumber} scale={zoom} highlights={highlights.filter(h=>h.courseId===course.id&&h.page===pageNumber)} focusHighlightId={null} clearFocus={()=>{}} onSelection={addExternalHighlight} locked={locked} markTool={markTool} markColor={markColor} onPinchZoom={setZoom} onEraseHighlight={eraseExternalHighlight}/>
     </div>
   </div>}
   {sel&&<div className="external-selection">
@@ -903,7 +917,7 @@ function CardModal({draft,setDraft,suggestions,onUse,onClose,onSave}){
  return <div className="overlay" onClick={e=>{if(e.target===e.currentTarget)onClose()}}>
   <div className="modal">
    <div className="mh"><div><small className="eyebrow">FLASHCARD</small><h2>Créer ta carte</h2></div><button onClick={onClose}><X size={18}/></button></div>
-   {suggestions?.length>0&&<div className="suggestion-grid">{suggestions.map((s,i)=><button key={i} className={"suggestion-card "+(draft?.type===s.type?"chosen":"")} onClick={()=>onUse(s)}><span className="suggestion-icon">{s.icon}</span><b>{s.title}</b><small>{s.front}</small><em>Utiliser ce format</em></button>)}</div>}
+   {suggestions?.length>0&&<div className="suggestion-grid">{suggestions.map((s,i)=><button key={i} className={"suggestion-card "+(draft?.type===s.type?"chosen":"")} onClick={()=>onUse(s)}><span className="suggestion-icon">{s.icon}</span><b>{s.title}</b><small><strong>Recto :</strong> {s.front}</small><small><strong>Verso :</strong> {s.back}</small><em>Utiliser ce format</em></button>)}</div>}
    <label>Recto<textarea rows="3" value={draft?.front||""} onChange={e=>setDraft(d=>({...d,front:e.target.value}))}/></label>
    <label>Verso<textarea rows="4" value={draft?.back||""} onChange={e=>setDraft(d=>({...d,back:e.target.value}))}/></label>
    <div className="source"><small>Source • page {draft?.page||"—"}</small><p>{draft?.source||"Passage sélectionné"}</p></div>
@@ -913,10 +927,19 @@ function CardModal({draft,setDraft,suggestions,onUse,onClose,onSave}){
  </div>
 }
 
-function Cards({cards,search,open,del}){
+function Cards({cards,search,open,del,edit}){
  const filtered=cards.filter(c=>(c.front+" "+c.back+" "+(c.source||"")).toLowerCase().includes((search||"").toLowerCase()));
- return <div className="page"><div className="title"><div><small>MA BIBLIOTHÈQUE</small><h1>Mes flashcards</h1></div></div>
-  {filtered.length?<div className="list">{filtered.map(c=><div className="cardrow" key={c.id}><span className="emoji">{c.type==="cloze"?"🧩":c.type==="concept"?"💡":"❓"}</span><div><b>{c.front}</b><p>{c.back}</p><small>Page {c.page} • {c.level||"À réviser"}</small></div><button onClick={()=>open(c)}>Source</button><button className="danger" onClick={()=>del(c.id)}><Trash2 size={16}/></button></div>)}</div>:<div className="panel empty"><Brain size={35}/><p>Aucune flashcard pour l’instant.</p></div>}
+ return <div className="page"><div className="title"><div><small>MA BIBLIOTHÈQUE</small><h1>Mes flashcards</h1></div><span className="pill">{cards.length} carte(s)</span></div>
+  {filtered.length?<div className="cards-library">{filtered.map(c=><article className="flashcard-row" key={c.id}>
+    <div className="flashcard-type">{c.type==="cloze"?"🧩":c.type==="concept"?"💡":"❓"}</div>
+    <div className="flashcard-content">
+      <div className="flashcard-side"><small>RECTO</small><strong>{c.front}</strong></div>
+      <div className="flashcard-divider"/>
+      <div className="flashcard-side back"><small>VERSO</small><p>{c.back}</p></div>
+      <div className="flashcard-meta">Page {c.page} • {c.level||"À réviser"}</div>
+    </div>
+    <div className="flashcard-actions"><button onClick={()=>edit(c)}>Modifier</button><button onClick={()=>open(c)}>Source</button><button className="danger" onClick={()=>del(c.id)}><Trash2 size={16}/></button></div>
+  </article>)}</div>:<div className="panel empty"><Brain size={35}/><p>Aucune flashcard pour l’instant.</p></div>}
  </div>
 }
 
