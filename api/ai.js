@@ -63,6 +63,21 @@ module.exports=async function handler(req,res){
     explain:{
       name:"rmed_explain",
       schema:{type:"object",additionalProperties:false,properties:{answer:{type:"string"}},required:["answer"]}
+    },
+    chat:{
+      name:"rmed_chat",
+      schema:{type:"object",additionalProperties:false,properties:{answer:{type:"string"}},required:["answer"]}
+    },
+    qcm_session:{
+      name:"rmed_qcm_session",
+      schema:{type:"object",additionalProperties:false,properties:{
+        questions:{type:"array",minItems:30,maxItems:30,items:{type:"object",additionalProperties:false,properties:{
+          question:{type:"string"},
+          choices:{type:"array",minItems:2,maxItems:3,items:{type:"string"}},
+          answerIndex:{type:"integer",minimum:0,maximum:2},
+          explanation:{type:"string"}
+        },required:["question","choices","answerIndex","explanation"]}}
+      },required:["questions"]}
     }
   };
 
@@ -74,6 +89,10 @@ module.exports=async function handler(req,res){
     instructions="Tu es l’IA pédagogique de RMed. Transforme UNIQUEMENT le passage fourni en texte à trous. Utilise {{...}} autour des éléments réellement masqués. N’invente rien. Réponds uniquement avec le JSON demandé.";
   }else if(action==="qcm"){
     instructions="Tu es l’IA pédagogique de RMed pour le PASS. Crée un QCM à partir UNIQUEMENT du passage fourni, avec 2 ou 3 propositions. Une seule proposition doit être correcte. Les distracteurs doivent rester cohérents avec le passage. N’invente aucune information. Réponds uniquement avec le JSON demandé.";
+  }else if(action==="chat"){
+    instructions="Tu es RMed, assistant pédagogique pour un étudiant en PASS. Réponds à la question en te basant UNIQUEMENT sur les ressources fournies dans le contexte. Cite le nom du cours et le numéro de page quand le contexte le permet. Si l’information n’est pas présente dans les ressources, dis clairement que tu ne la trouves pas dans les cours fournis au lieu d’inventer. Explique simplement mais avec le vocabulaire exact des cours. Réponds uniquement avec le JSON demandé.";
+  }else if(action==="qcm_session"){
+    instructions="Tu es RMed, générateur de QCM pour le PASS. Crée EXACTEMENT 30 questions à partir UNIQUEMENT des ressources fournies. Chaque question doit avoir 2 ou 3 propositions maximum et une seule bonne réponse. Les pièges doivent rester justifiables par les ressources. N’utilise aucune connaissance extérieure. Varie les formulations et couvre les détails, définitions, localisations, étapes, chiffres et exceptions présents dans les ressources. Donne une explication courte pour chaque correction. Réponds uniquement avec le JSON demandé.";
   }else{
     instructions="Tu es l’IA pédagogique de RMed pour le PASS. Explique UNIQUEMENT le passage fourni, clairement et simplement. Ne complète pas avec des faits extérieurs au passage sauf pour reformuler. Réponds uniquement avec le JSON demandé.";
   }
