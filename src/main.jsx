@@ -684,16 +684,29 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,selection,focusHig
   if(autoHighlight)onHighlightSelection(payload);
  }
  function finishSelection(autoHighlight=false){
-  window.setTimeout(()=>publishSelection(autoHighlight),90);
+  window.setTimeout(()=>publishSelection(autoHighlight),180);
  }
  function setMode(next){
   setTool(next);
-  if(next==="hand")window.getSelection()?.removeAllRanges();
+  window.getSelection()?.removeAllRanges();
+  onSelection?.(null);
  }
+ useEffect(()=>{
+  const onSelectionChange=()=>{
+   if(tool!=="select"&&tool!=="highlight")return;
+   window.requestAnimationFrame(()=>{
+    const payload=getPayload();
+    if(payload)onSelection(payload);
+   });
+  };
+  document.addEventListener("selectionchange",onSelectionChange);
+  return()=>document.removeEventListener("selectionchange",onSelectionChange);
+ },[tool,pageNumber,courseId]);
  const selected=selection?.courseId===courseId&&Number(selection.page)===Number(pageNumber)?selection:null;
 
  return <div className={"pdf-stage "+(tool==="select"?"tool-select":tool==="highlight"?"tool-highlight":"tool-hand")}
-   onPointerUp={()=>{if(tool==="select")finishSelection(false);else if(tool==="highlight")finishSelection(true)}}
+   onPointerUp={e=>{if(tool==="select")finishSelection(false);else if(tool==="highlight")finishSelection(true)}}
+   onTouchEnd={()=>{if(tool==="select")finishSelection(false);else if(tool==="highlight")finishSelection(true)}}
    onPointerCancel={()=>{if(tool!=="hand")finishSelection(tool==="highlight")}}>
   <div className="document-tool-palette">
    <button className={tool==="select"?"chosen":""} onClick={()=>setMode("select")} title="Sélectionner du texte"><MousePointer2 size={19}/></button>
