@@ -595,3 +595,36 @@
   -webkit-user-select:none;
   user-select:none;
 }
+
+.ai-generate-row{
+ display:flex;
+ align-items:center;
+ justify-content:space-between;
+ gap:14px;
+ margin:12px 0 16px;
+ padding:12px 14px;
+ border:1px solid #e8eaf1;
+ border-radius:14px;
+ background:#fafbff;
+}
+.ai-generate-row>div{display:grid;gap:3px;min-width:0}
+.ai-generate-row small{color:#687083}
+.ai-action{
+ border:1px solid #d9ddea;
+ background:#fff;
+ color:#202534;
+ border-radius:10px;
+ padding:9px 12px;
+ font-weight:700;
+ cursor:pointer;
+}
+.ai-action:disabled{opacity:.55;cursor:wait}
+.ai-error{
+ margin:10px 0;
+ padding:10px 12px;
+ border-radius:10px;
+ background:#fff1f1;
+ color:#9b2c2c;
+ border:1px solid #f1caca;
+ font-size:13px;
+}
