@@ -850,3 +850,59 @@
   .ai-toolbar-button span{display:none}
   .ai-toolbar-button{padding:0!important;justify-content:center}
 }
+
+/* RMed IA - pédagogie par compréhension */
+.ai-mode-hint{
+  display:flex;
+  gap:10px;
+  align-items:flex-start;
+  margin:12px 0 10px;
+  padding:11px 13px;
+  border:1px solid var(--border,#e6e8ef);
+  border-radius:12px;
+  background:var(--panel,#f8f9fc);
+}
+.ai-mode-hint b{font-size:.83rem;white-space:nowrap}
+.ai-mode-hint span{font-size:.82rem;color:var(--muted,#667085)}
+.ai-prompt-row{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin:9px 0 12px;
+}
+.ai-prompt-row button,
+.ai-help-button{
+  border:1px solid var(--border,#e6e8ef);
+  background:var(--panel,#fff);
+  color:var(--text,#202431);
+  border-radius:10px;
+  padding:9px 12px;
+  font:inherit;
+  cursor:pointer;
+}
+.ai-help-button{
+  width:100%;
+  margin:12px 0;
+  text-align:left;
+  font-weight:650;
+}
+.ai-help-button:disabled{opacity:.6;cursor:wait}
+.review-ai-help{
+  margin:10px 0 14px;
+  padding:14px;
+  border-radius:14px;
+  background:var(--panel,#f7f8fb);
+  border:1px solid var(--border,#e6e8ef);
+  line-height:1.55;
+}
+.review-ai-help small{
+  display:block;
+  margin-bottom:7px;
+  font-weight:700;
+  color:var(--muted,#667085);
+}
+.qcm-correction .review-ai-help{margin-top:12px}
+.ai-answer{
+  white-space:pre-wrap;
+  line-height:1.6;
+}
