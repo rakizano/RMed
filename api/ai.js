@@ -184,7 +184,8 @@ export default async function handler(req,res){
   const input=(action==="qcm_session"?"RESSOURCES POUR LE QCM:\n":"PASSAGE / DEMANDE:\n")+text+"\n\nCONTEXTE ET RESSOURCES PERTINENTES:\n"+context.slice(0,30000);
   const schema=pickSchema(action);
   const isQcm=action==="qcm_session";
-  const maxOutputTokens=isQcm?10000:action==="explain_error"?1800:1400;
+  const isBatch=action==="flashcard_batch";
+  const maxOutputTokens=isQcm?10000:isBatch?5200:action==="explain_error"?1800:1400;
   const temperature=isQcm?0.45:0.35;
 
   try{
