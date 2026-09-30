@@ -1,6 +1,6 @@
 import React,{useEffect,useMemo,useRef,useState}from"react";
 import{createRoot}from"react-dom/client";
-import{BookOpen,Brain,ChevronLeft,ChevronRight,Clock3,FileText,History,Home as HomeIcon,ListChecks,Minus,Plus,Search,Sparkles,Target,Trash2,Upload,X,Highlighter,Lock,Unlock}from"lucide-react";
+import{BookOpen,Brain,ChevronLeft,ChevronRight,Clock3,FileText,History,Home as HomeIcon,ListChecks,Minus,Plus,Search,Sparkles,Target,Trash2,Upload,X,Highlighter,Lock,Unlock,Palette,PenLine,Eraser}from"lucide-react";
 import"./styles.css";
 
 
@@ -193,7 +193,7 @@ function App(){
    const pg=currentPage();
    const existing=highlights.find(h=>h.courseId===course.id&&h.pageId===pg.id&&h.text===selection.text);
    if(existing)return existing.id;
-   const h={id:uid(),courseId:course.id,pageId:pg.id,page:pg.n,text:selection.text,rects:selection.rects||[],context:selection.context||selection.text,created:Date.now()};
+   const h={id:uid(),courseId:course.id,pageId:pg.id,page:pg.n,text:selection.text,rects:selection.rects||[],context:selection.context||selection.text,color:selection.color||"#ffe66d99",created:Date.now()};
    setHighlights(x=>[...x,h]);
    return h.id;
  }
@@ -292,6 +292,8 @@ function Stat({n,t}){return <div className="stat"><strong>{n}</strong><span>{t}<
 
 function Course({course,pageNumber,setPageNumber,pdfDoc,pdfNativeUrl,pdfLoading,pdfError,zoom,setZoom,sel,suggestions,onSelection,openCreator,applySuggestion,pdfLocked,setPdfLocked,highlights,focusHighlightId,clearFocus,importPdf,courses,open,openUpload}){
  const pg=course.pages.find(x=>x.n===pageNumber)||course.pages[0];
+ const[markColor,setMarkColor]=useState("#ffe66d99");
+ const[markTool,setMarkTool]=useState("highlight");
  const prev=()=>setPageNumber(Math.max(1,pageNumber-1));
  const next=()=>setPageNumber(Math.min(course.pages.length,pageNumber+1));
  return <div className="page"><div className="title"><div><small>LECTEUR DE COURS</small><h1>{course.title}</h1></div><button className="upload" onClick={()=>openUpload?.()}><Upload/>Importer un PDF</button></div>
@@ -302,10 +304,10 @@ function Course({course,pageNumber,setPageNumber,pdfDoc,pdfNativeUrl,pdfLoading,
    <div className="notes-list">{highlights.length?highlights.map(h=><div className="note-card" key={h.id}><div className="marker"></div><p>« {h.text} »</p><button onClick={()=>onSelection({text:h.text,rects:h.rects,context:h.context,highlightId:h.id})}>Créer une carte</button></div>):<div className="notes-empty"><Highlighter/><p>Surligne un élément important dans le PDF.<br/>Tes passages apparaîtront ici.</p></div>}</div>
   </aside>
   <section className="pdf-reader">
-   <div className="pdf-toolbar"><button className={"tool-label "+(pdfLocked?"locked":"")} onClick={()=>setPdfLocked(v=>!v)} title={pdfLocked?"Déverrouiller le déplacement du PDF":"Verrouiller le déplacement du PDF"}>{pdfLocked?<Lock/>:<Unlock/>}<span>{pdfLocked?"PDF verrouillé":"Verrouiller PDF"}</span></button><button onClick={prev} disabled={pageNumber<=1}><ChevronLeft/></button><span>Page <b>{pageNumber}</b> / {course.pages.length}</span><button onClick={next} disabled={pageNumber>=course.pages.length}><ChevronRight/></button><span className="spacer"/><button onClick={()=>setZoom(z=>Math.max(.75,z-.1))}><Minus/></button><span>{Math.round(zoom*100)}%</span><button onClick={()=>setZoom(z=>Math.min(2.5,z+.1))}><Plus/></button></div>
+   <div className="pdf-toolbar"><button className={"tool-label "+(pdfLocked?"locked":"")} onClick={()=>setPdfLocked(v=>!v)} title={pdfLocked?"Déverrouiller le déplacement du PDF":"Verrouiller le déplacement du PDF"}>{pdfLocked?<Lock/>:<Unlock/>}<span>{pdfLocked?"PDF verrouillé":"Verrouiller PDF"}</span></button><button onClick={prev} disabled={pageNumber<=1}><ChevronLeft/></button><span>Page <b>{pageNumber}</b> / {course.pages.length}</span><button onClick={next} disabled={pageNumber>=course.pages.length}><ChevronRight/></button><AnnotationPalette color={markColor} tool={markTool} setColor={setMarkColor} setTool={setMarkTool}/><span className="spacer"/><button onClick={()=>setZoom(z=>Math.max(.75,z-.1))}><Minus/></button><span>{Math.round(zoom*100)}%</span><button onClick={()=>setZoom(z=>Math.min(2.5,z+.1))}><Plus/></button></div>
    {pdfLoading&&<div className="pdf-state">Ouverture du PDF…</div>}
    {pdfError&&<div className="pdf-state pdf-error"><b>Impossible d’ouvrir ce PDF</b><br/>{pdfError}<br/><button className="primary" onClick={openUpload}>Réimporter le PDF</button></div>}
-   {!pdfLoading&&!pdfError ? (course.kind==="pdf" ? (pdfNativeUrl&&isAppleMobile() ? <iframe className="native-pdf" title="PDF" src={pdfNativeUrl}/> : pdfDoc ? <PDFPage pdfDoc={pdfDoc} pageNumber={pageNumber} scale={zoom} highlights={highlights} focusHighlightId={focusHighlightId} clearFocus={clearFocus} onSelection={onSelection} locked={pdfLocked}/> : <div className="pdf-state">Préparation du PDF…</div>) : course.kind==="demo" ? <DemoPage pg={pg} onSelection={onSelection}/> : <div className="pdf-state">PDF indisponible. Réimporte-le pour continuer.</div>) : null}
+   {!pdfLoading&&!pdfError ? (course.kind==="pdf" ? (pdfNativeUrl&&isAppleMobile() ? <iframe className="native-pdf" title="PDF" src={pdfNativeUrl}/> : pdfDoc ? <PDFPage courseId={course.id} pdfDoc={pdfDoc} pageNumber={pageNumber} scale={zoom} highlights={highlights} focusHighlightId={focusHighlightId} clearFocus={clearFocus} onSelection={onSelection} locked={pdfLocked} markTool={markTool} markColor={markColor}/> : <div className="pdf-state">Préparation du PDF…</div>) : course.kind==="demo" ? <DemoPage pg={pg} onSelection={onSelection}/> : <div className="pdf-state">PDF indisponible. Réimporte-le pour continuer.</div>) : null}
    {sel&&<SelectionBar sel={sel} suggestions={suggestions} onHighlight={()=>{}} onCreate={()=>openCreator(sel)} onUse={applySuggestion}/>}
   </section>
  </div></div>
@@ -322,7 +324,7 @@ function DemoPage({pg,onSelection}){
  return <div className="demo-paper" ref={ref} onMouseUp={getSelection} onTouchEnd={getSelection}><small>PAGE {pg.n}</small><p>{pg.text}</p><p className="hint">Sélectionne un passage comme dans un vrai PDF pour créer une carte.</p></div>
 }
 
-function PDFPage({pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus,onSelection,locked}){
+function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus,onSelection,locked,markTool,markColor}){
  const pageRef=useRef(null),canvasRef=useRef(null),textRef=useRef(null),contextRef=useRef("");
  const penRef=useRef({active:false,points:[],spans:new Set(),pointerId:null,scrollLeft:0,scrollTop:0,stage:null});
  const touchRef=useRef(new Map());
@@ -330,7 +332,11 @@ function PDFPage({pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus
  const[height,setHeight]=useState(800);
  const[penTrace,setPenTrace]=useState([]);
  const[tempRects,setTempRects]=useState([]);
+ const[drawings,setDrawings]=useState(()=>load("rmed_drawings_"+courseId+"_"+pageNumber,[]));
+ const drawKey="rmed_drawings_"+courseId+"_"+pageNumber;
 
+ useEffect(()=>{setDrawings(load(drawKey,[]));},[drawKey]);
+ useEffect(()=>{save(drawKey,drawings);},[drawKey,drawings]);
  useEffect(()=>{let cancelled=false;
  async function render(){
    try{
@@ -396,17 +402,21 @@ function PDFPage({pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus
    if(e.pointerType!=="pen")return;
    e.preventDefault();
    const stage=pageRef.current?.parentElement;
-   penRef.current={active:true,points:[],spans:new Set(),pointerId:e.pointerId,scrollLeft:stage?.scrollLeft||0,scrollTop:stage?.scrollTop||0,stage};
+   penRef.current={active:true,points:[],spans:new Set(),pointerId:e.pointerId,scrollLeft:stage?.scrollLeft||0,scrollTop:stage?.scrollTop||0,stage,mode:markTool,color:markColor};
    if(stage){stage.classList.add("pencil-active");stage.scrollLeft=penRef.current.scrollLeft;stage.scrollTop=penRef.current.scrollTop}
    e.currentTarget.setPointerCapture?.(e.pointerId);
-   updatePenVisual(e);
+   if(markTool==="highlight")updatePenVisual(e);
+   else if(markTool==="pen")updateDrawVisual(e);
+   else if(markTool==="eraser")eraseAt(e);
  }
  function penMove(e){
    if(!penRef.current.active||e.pointerType!=="pen")return;
    e.preventDefault();
    const p=penRef.current;
    if(p.stage){p.stage.scrollLeft=p.scrollLeft;p.stage.scrollTop=p.scrollTop}
-   updatePenVisual(e);
+   if(p.mode==="highlight")updatePenVisual(e);
+   else if(p.mode==="pen")updateDrawVisual(e);
+   else if(p.mode==="eraser")eraseAt(e);
  }
  function penUp(e){
    const p=penRef.current;
@@ -415,16 +425,43 @@ function PDFPage({pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus
    p.active=false;
    if(p.stage){p.stage.classList.remove("pencil-active");p.stage.scrollLeft=p.scrollLeft;p.stage.scrollTop=p.scrollTop}
    e.currentTarget.releasePointerCapture?.(p.pointerId);
+   if(p.mode==="pen"&&p.points.length>1){
+     setDrawings(x=>[...x,{id:uid(),points:p.points.slice(),color:p.color,width:5}]);
+   }
    const spans=[...p.spans];
    setTempRects([]);setPenTrace([]);
-   if(!spans.length)return;
+   if(p.mode!=="highlight"||!spans.length)return;
    const root=pageRef.current.getBoundingClientRect();
    const rects=spans.map(el=>{const r=el.getBoundingClientRect();return{x:r.left-root.left,y:r.top-root.top,width:r.width,height:r.height,order:[...textRef.current.children].indexOf(el)}})
      .filter(r=>r.width>1&&r.height>1).sort((a,b)=>a.order-b.order);
    const text=spans.map(el=>el.textContent).join(" ").replace(/\s+/g," ").trim();
-   onSelection({text,rects:rects.map(({order,...r})=>r),context:contextRef.current,autoHighlight:true});
+   onSelection({text,rects:rects.map(({order,...r})=>r),context:contextRef.current,autoHighlight:true,color:p.color});
  }
 
+ function updateDrawVisual(e){
+   const p=penRef.current;
+   const root=pageRef.current?.getBoundingClientRect();if(!root)return;
+   p.points.push({x:e.clientX-root.left,y:e.clientY-root.top});
+   setPenTrace(p.points.slice(-180));
+ }
+ function pointDistanceToSegment(px,py,ax,ay,bx,by){
+   const dx=bx-ax,dy=by-ay;
+   if(dx===0&&dy===0)return Math.hypot(px-ax,py-ay);
+   const t=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/(dx*dx+dy*dy)));
+   return Math.hypot(px-(ax+t*dx),py-(ay+t*dy));
+ }
+ function eraseAt(e){
+   const root=pageRef.current?.getBoundingClientRect();if(!root)return;
+   const x=e.clientX-root.left,y=e.clientY-root.top;
+   setDrawings(prev=>prev.filter(d=>{
+     for(let i=1;i<d.points.length;i++){
+       const a=d.points[i-1],b=d.points[i];
+       if(pointDistanceToSegment(x,y,a.x,a.y,b.x,b.y)<22)return false;
+     }
+     return true;
+   }));
+ }
+ 
  function touchStart(e){
    if(locked)return;
    if(e.touches.length===2){
@@ -471,12 +508,32 @@ function PDFPage({pdfDoc,pageNumber,scale,highlights,focusHighlightId,clearFocus
   <div className="pdf-page" ref={pageRef} style={{height}} onMouseUp={select}>
    <canvas ref={canvasRef}/>
    <div className="pdf-highlights">
-    {penTrace.length>1&&<svg className="pen-trace" viewBox={"0 0 "+Math.max(1,pageRef.current?.clientWidth||1)+" "+Math.max(1,pageRef.current?.clientHeight||1)} preserveAspectRatio="none"><polyline points={penTrace.map(p=>p.x+","+p.y).join(" ")} fill="none" stroke="rgba(255,230,109,.68)" strokeWidth="14" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+    {drawings.length>0&&<svg className="drawings-layer" viewBox={"0 0 "+Math.max(1,pageRef.current?.clientWidth||1)+" "+Math.max(1,pageRef.current?.clientHeight||1)} preserveAspectRatio="none">{drawings.map(d=><polyline key={d.id} points={d.points.map(p=>p.x+","+p.y).join(" ")} fill="none" stroke={d.color} strokeWidth={d.width||5} strokeLinecap="round" strokeLinejoin="round"/>)}</svg>}
+    {penTrace.length>1&&<svg className="pen-trace" viewBox={"0 0 "+Math.max(1,pageRef.current?.clientWidth||1)+" "+Math.max(1,pageRef.current?.clientHeight||1)} preserveAspectRatio="none"><polyline points={penTrace.map(p=>p.x+","+p.y).join(" ")} fill="none" stroke={markTool==="pen"?markColor:markColor} strokeWidth={markTool==="pen"?5:14} strokeLinecap="round" strokeLinejoin="round"/></svg>}
     {tempRects.length>0&&<div className="highlight-group live-highlight">{tempRects.map((r,i)=><span key={"t"+i} style={{left:r.x,top:r.y,width:r.width,height:r.height}}/> )}</div>}
-    {highlights.map(h=><div key={h.id} id={"hl-"+h.id} className="highlight-group" onClick={()=>onSelection({text:h.text,rects:h.rects,context:h.context,highlightId:h.id})}>{h.rects.map((r,i)=><span key={i} style={{left:r.x,top:r.y,width:r.width,height:r.height}}/> )}</div>)}
+    {highlights.map(h=><div key={h.id} id={"hl-"+h.id} className="highlight-group" onClick={()=>onSelection({text:h.text,rects:h.rects,context:h.context,highlightId:h.id})}>{h.rects.map((r,i)=><span key={i} style={{left:r.x,top:r.y,width:r.width,height:r.height,background:h.color||"#ffe66d99"}}/> )}</div>)}
    </div>
    <div className="pdf-text" ref={textRef}/>
   </div>
+ </div>
+}
+
+function AnnotationPalette({color,tool,setColor,setTool}){
+ const colors=[
+  ["#ffe66d99","#FFD84D"],
+  ["#ff9fb799","#FF6B9A"],
+  ["#8fd8ff99","#39B8FF"],
+  ["#9ee7b099","#42C878"],
+  ["#ffc28a99","#FF9A3D"],
+  ["#c7b5ff99","#8B6CFF"]
+ ];
+ const[open,setOpen]=useState(false);
+ return <div className="annotation-tools">
+  <button className={"annotation-tool "+(tool==="highlight"?"active":"")} title="Surligneur" onClick={()=>setTool("highlight")}><Highlighter size={16}/></button>
+  <button className={"annotation-tool "+(tool==="pen"?"active":"")} title="Stylo / dessin" onClick={()=>setTool("pen")}><PenLine size={16}/></button>
+  <button className={"annotation-tool "+(tool==="eraser"?"active":"")} title="Gomme" onClick={()=>setTool("eraser")}><Eraser size={16}/></button>
+  <button className="annotation-palette-button" title="Palette de couleurs" onClick={()=>setOpen(v=>!v)}><span style={{background:color}}/><Palette size={15}/></button>
+  {open&&<div className="annotation-palette">{colors.map(([rgba,solid])=><button key={rgba} className={color===rgba?"chosen":""} title="Couleur" onClick={()=>{setColor(rgba);setTool(tool==="eraser"?"highlight":tool);setOpen(false)}}><span style={{background:solid}}/></button>)}</div>}
  </div>
 }
 
