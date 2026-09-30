@@ -85,6 +85,52 @@ async function getPdf(id){
    return await new Promise((res,rej)=>{const tx=db.transaction("pdfs","readonly");const r=tx.objectStore("pdfs").get(id);r.onsuccess=()=>res(r.result||null);r.onerror=()=>rej(r.error)});
  }catch(err){console.warn("PDF storage unavailable",err);return null}
 }
+
+const resourceTextCache=new Map();
+async function getCourseResourceText(course){
+ if(!course)return "";
+ if(resourceTextCache.has(course.id))return resourceTextCache.get(course.id);
+ if(course.kind==="demo"){
+  const text=(course.pages||[]).map(p=>"Page "+p.n+": "+(p.text||"")).join("\n");
+  resourceTextCache.set(course.id,text);
+  return text;
+ }
+ try{
+  const data=await getPdf(course.id);
+  if(!data)return "";
+  const doc=await openPdfDocument(data);
+  const chunks=[];
+  for(let i=1;i<=doc.numPages;i++){
+   const page=await doc.getPage(i);
+   const text=await page.getTextContent();
+   const pageText=text.items.map(x=>x.str||"").join(" ").replace(/\s+/g," ").trim();
+   if(pageText)chunks.push("Page "+i+": "+pageText);
+  }
+  const joined=chunks.join("\n");
+  resourceTextCache.set(course.id,joined);
+  return joined;
+ }catch(err){
+  console.warn("RMed resource extraction error",err);
+  return "";
+ }
+}
+async function buildResourceContext(courses,{courseId=null,limit=15000}={}){
+ const list=[...courses];
+ const selected=courseId?list.find(c=>c.id===courseId):null;
+ const ordered=selected?[selected,...list.filter(c=>c.id!==selected.id)]:list;
+ if(!ordered.length)return "";
+ const parts=[];
+ let remaining=limit;
+ for(let i=0;i<ordered.length&&remaining>200;i++){
+  const text=await getCourseResourceText(ordered[i]);
+  if(!text)continue;
+  const quota=selected&&i===0?Math.min(6500,remaining):Math.min(2800,remaining);
+  const clipped=text.slice(0,quota);
+  parts.push("=== COURS: "+ordered[i].title+" ===\n"+clipped);
+  remaining-=clipped.length;
+ }
+ return parts.join("\n\n").slice(0,limit);
+}
 async function deletePdf(id){
  const db=await dbPromise;if(!db)return;
  await new Promise((res,rej)=>{const tx=db.transaction("pdfs","readwrite");tx.objectStore("pdfs").delete(id);tx.oncomplete=res;tx.onerror=()=>rej(tx.error)});
@@ -260,7 +306,7 @@ function App(){
 
  function onSelection(selection){
    if(!selection?.text)return;
-   const hId=selection.autoHighlight?addHighlight(selection):null;
+   const hId=selection.highlightId||addHighlight(selection);
    const next={...selection,highlightId:hId};
    setSel(next);
    makeSuggestions(next);
@@ -330,8 +376,9 @@ function App(){
    <Nav icon={<Brain/>} t="Flashcards" a={tab==="cards"} f={()=>nav("cards")}/>
    <Nav icon={<Target/>} t="Réviser" a={tab==="review"} f={()=>nav("review")}/>
    <Nav icon={<ListChecks/>} t="QCM" a={tab==="qcm"} f={()=>nav("qcm")}/>
+   <Nav icon={<Sparkles/>} t="Assistant IA" a={tab==="ai"} f={()=>nav("ai")}/>
    <Nav icon={<History/>} t="Historique" a={tab==="history"} f={()=>nav("history")}/>
-   <div className="dog">🐶<span>Ton compagnon est prêt.</span></div>
+   <button className="dog" onClick={()=>nav("ai")} title="Ouvrir l’assistant IA">🐶<span>Parler à RMed</span></button>
   </aside>
 
   <main>
@@ -341,7 +388,8 @@ function App(){
    {tab==="course"&&<Course openUpload={()=>setUploadOpen(true)} course={course} pageNumber={pageNumber} setPageNumber={setPageNumber} pdfDoc={pdfDoc} pdfNativeUrl={pdfNativeUrl} pdfLoading={pdfLoading} pdfError={pdfError} zoom={zoom} setZoom={setZoom} sel={sel} suggestions={suggestions} onSelection={onSelection} openCreator={openCreator} applySuggestion={applySuggestion} pdfLocked={pdfLocked} setPdfLocked={setPdfLocked} highlights={highlights.filter(h=>h.courseId===course.id&&h.page===pageNumber)} focusHighlightId={focusHighlightId} clearFocus={()=>setFocusHighlightId(null)} importPdf={file=>addPdf(file,activeFolderId)} courses={courses} folders={folders} activeFolderId={activeFolderId} setActiveFolderId={setActiveFolderId} onCreateFolder={createFolder} open={open} onEraseHighlight={eraseHighlight} onAskAI={()=>setAiOpen(true)}/>}
    {tab==="cards"&&<Cards cards={cards} search={search} open={openCardSource} del={deleteCard} edit={editCard}/>}
    {tab==="review"&&<Review rc={rc} revealed={revealed} setRevealed={setRevealed} rate={rate} total={due.length} i={ri}/>}
-   {tab==="qcm"&&<QCM cards={cards} qcm={qcm} setQcm={setQcm}/>}
+   {tab==="qcm"&&<QCM courses={courses} cards={cards} qcm={qcm} setQcm={setQcm}/>}
+   {tab==="ai"&&<AIChat courses={courses} course={course} selection={sel}/>}
    {tab==="history"&&<HistoryPage h={history}/>}
   </main>
 
@@ -431,7 +479,7 @@ function Course({course,pageNumber,setPageNumber,pdfDoc,pdfNativeUrl,pdfLoading,
    <div className="notes-list">{highlights.length?highlights.map(h=><div className="note-card" key={h.id}><div className="marker"></div><p>« {h.text} »</p><button onClick={()=>onSelection({text:h.text,rects:h.rects,context:h.context,highlightId:h.id})}>Créer une carte</button></div>):<div className="notes-empty"><Highlighter/><p>Surligne un élément important dans le PDF.<br/>Tes passages apparaîtront ici.</p></div>}</div>
   </aside>
   <section className="pdf-reader">
-   <div className="pdf-toolbar"><button className={"tool-label "+(pdfLocked?"locked":"")} onClick={()=>setPdfLocked(v=>!v)} title={pdfLocked?"Déverrouiller le déplacement du PDF":"Verrouiller le déplacement du PDF"}>{pdfLocked?<Lock/>:<Unlock/>}<span>{pdfLocked?"PDF verrouillé":"Verrouiller PDF"}</span></button><button onClick={prev} disabled={pageNumber<=1}><ChevronLeft/></button><span>Page <b>{pageNumber}</b> / {course.pages.length}</span><button onClick={next} disabled={pageNumber>=course.pages.length}><ChevronRight/></button><button className="external-reader-button" onClick={()=>window.open(window.location.pathname+"?reader="+encodeURIComponent(course.id)+"&page="+pageNumber,"_blank")} title="Ouvrir le PDF dans le lecteur externe"><ExternalLink size={16}/><span>Lecteur PDF</span></button><AnnotationPalette color={markColor} tool={markTool} setColor={setMarkColor} setTool={setMarkTool}/><span className="spacer"/><button onClick={()=>setZoom(z=>Math.max(.75,z-.1))}><Minus/></button><span>{Math.round(zoom*100)}%</span><button onClick={()=>setZoom(z=>Math.min(2.5,z+.1))}><Plus/></button></div>
+   <div className="pdf-toolbar"><button className={"tool-label "+(pdfLocked?"locked":"")} onClick={()=>setPdfLocked(v=>!v)} title={pdfLocked?"Déverrouiller le déplacement du PDF":"Verrouiller le déplacement du PDF"}>{pdfLocked?<Lock/>:<Unlock/>}<span>{pdfLocked?"PDF verrouillé":"Verrouiller PDF"}</span></button><button onClick={prev} disabled={pageNumber<=1}><ChevronLeft/></button><span>Page <b>{pageNumber}</b> / {course.pages.length}</span><button onClick={next} disabled={pageNumber>=course.pages.length}><ChevronRight/></button><button className="ai-toolbar-button" onClick={onAskAI} title="Ouvrir RMed IA"><Sparkles size={16}/><span>Assistant IA</span></button><button className="external-reader-button" onClick={()=>window.open(window.location.pathname+"?reader="+encodeURIComponent(course.id)+"&page="+pageNumber,"_blank")} title="Ouvrir le PDF dans le lecteur externe"><ExternalLink size={16}/><span>Lecteur PDF</span></button><AnnotationPalette color={markColor} tool={markTool} setColor={setMarkColor} setTool={setMarkTool}/><span className="spacer"/><button onClick={()=>setZoom(z=>Math.max(.75,z-.1))}><Minus/></button><span>{Math.round(zoom*100)}%</span><button onClick={()=>setZoom(z=>Math.min(2.5,z+.1))}><Plus/></button></div>
    {pdfLoading&&<div className="pdf-state">Ouverture du PDF…</div>}
    {pdfError&&<div className="pdf-state pdf-error"><b>Impossible d’ouvrir ce PDF</b><br/>{pdfError}<br/><button className="primary" onClick={openUpload}>Réimporter le PDF</button></div>}
    {!pdfLoading&&!pdfError ? (course.kind==="pdf" ? (pdfNativeUrl&&isAppleMobile() ? <iframe className="native-pdf" title="PDF" src={pdfNativeUrl}/> : pdfDoc ? <PDFPage courseId={course.id} pdfDoc={pdfDoc} pageNumber={pageNumber} scale={zoom} highlights={highlights} focusHighlightId={focusHighlightId} clearFocus={clearFocus} onSelection={onSelection} locked={pdfLocked} markTool={markTool} markColor={markColor} onEraseHighlight={onEraseHighlight}/> : <div className="pdf-state">Préparation du PDF…</div>) : course.kind==="demo" ? <DemoPage pg={pg} onSelection={onSelection}/> : <div className="pdf-state">PDF indisponible. Réimporte-le pour continuer.</div>) : null}
@@ -605,10 +653,9 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,c
     try{
      const fromNode=from.firstChild||from;
      const toNode=to.firstChild||to;
-     const fromLen=from.textContent?.length||0;
      const toLen=to.textContent?.length||0;
-     range.setStart(fromNode,Math.max(0,Math.min(first.offset,fromLen)));
-     range.setEnd(toNode,Math.max(0,Math.min(last.offset,toLen)));
+     range.setStart(fromNode,0);
+     range.setEnd(toNode,toLen);
      if(!range.collapsed&&range.toString().trim())return range;
     }catch{}
    }
@@ -801,12 +848,10 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,c
    panRef.current.active=false;
    pinchRef.current.active=false;
   }
-  if(locked)e.preventDefault();
  }
 
  function touchMoveNative(e){
-  if(locked){e.preventDefault();return;}
-  if(e.touches.length!==2){e.preventDefault();return;}
+  if(e.touches.length!==2)return;
   e.preventDefault();
   const a=e.touches[0],b=e.touches[1];
   const dx=a.clientX-b.clientX,dy=a.clientY-b.clientY;
@@ -825,7 +870,12 @@ function PDFPage({courseId,pdfDoc,pageNumber,scale,highlights,focusHighlightId,c
   panRef.current.lastX=cx;panRef.current.lastY=cy;
  }
 
- function touchEnd(){panRef.current.active=false;pinchRef.current.active=false;}
+ function touchEnd(){
+  const wasGesture=panRef.current.active;
+  panRef.current.active=false;
+  pinchRef.current.active=false;
+  if(!wasGesture&&!penRef.current.active)window.setTimeout(select,60);
+ }
 
  function select(){
   if(penRef.current.active||touchRef.current.size)return;
@@ -966,6 +1016,78 @@ function AnnotationPalette({color,tool,setColor,setTool}){
  </div>
 }
 
+
+function AIChat({courses,course,selection}){
+ const[messages,setMessages]=useState(()=>load("rmed_ai_chat",[{
+  role:"assistant",
+  content:"Salut 👋 Je suis RMed. Je peux t’expliquer tes cours, retrouver une information dans tes ressources, créer des flashcards ou t’aider à préparer un QCM.",
+  time:Date.now()
+ }]));
+ const[input,setInput]=useState("");
+ const[scope,setScope]=useState("all");
+ const[busy,setBusy]=useState(false);
+ const[error,setError]=useState("");
+ const endRef=useRef(null);
+ useEffect(()=>{save("rmed_ai_chat",messages.slice(-40));},[messages]);
+ useEffect(()=>{endRef.current?.scrollIntoView({behavior:"smooth"});},[messages,busy]);
+ async function send(prefill=""){
+  const q=(prefill||input).trim();
+  if(!q||busy)return;
+  setInput("");
+  setError("");
+  const user={role:"user",content:q,time:Date.now()};
+  setMessages(x=>[...x,user]);
+  setBusy(true);
+  try{
+   const context=await buildResourceContext(courses,{courseId:scope==="course"?course?.id:null,limit:15000});
+   const conversation=messages.slice(-8).map(m=>(m.role==="user"?"Étudiant":"RMed")+": "+m.content).join("\n");
+   const selectedText=selection?.text?"\n\nPASSAGE SÉLECTIONNÉ:\n"+selection.text:"";
+   const data=await callRMedAI({
+    action:"chat",
+    text:q,
+    context:"RESSOURCES DISPONIBLES:\n"+context+selectedText+"\n\nHISTORIQUE RÉCENT:\n"+conversation
+   });
+   setMessages(x=>[...x,{role:"assistant",content:data?.answer||"Je n’ai pas réussi à formuler une réponse.",time:Date.now()}]);
+  }catch(err){
+   const msg=err?.message||"Impossible de contacter RMed IA.";
+   setError(msg);
+   setMessages(x=>[...x,{role:"assistant",content:"Je n’ai pas pu répondre pour le moment. Vérifie la connexion IA puis réessaie.",time:Date.now(),error:true}]);
+  }finally{setBusy(false)}
+ }
+ function clearChat(){
+  setMessages([{role:"assistant",content:"Nouvelle conversation. Je suis prêt à travailler à partir de tes cours.",time:Date.now()}]);
+  setError("");
+ }
+ return <div className="page ai-page">
+  <div className="ai-chat-shell">
+   <div className="ai-chat-header">
+    <div className="ai-avatar">✨</div>
+    <div><small className="eyebrow">RMed IA</small><h1>Ton assistant de cours</h1><p>Je réponds à partir de tes ressources déjà envoyées.</p></div>
+    <div className="ai-chat-header-actions">
+      <label><span>Ressources</span><select value={scope} onChange={e=>setScope(e.target.value)}><option value="all">Tous mes cours</option><option value="course" disabled={!course?.id}>Ce cours</option></select></label>
+      <button onClick={clearChat}>Nouveau chat</button>
+    </div>
+   </div>
+   <div className="ai-quick-actions">
+    <button onClick={()=>send("Explique-moi simplement le cours que je révise en ce moment, puis donne-moi les 5 points à retenir.")}>📚 Expliquer le cours</button>
+    <button onClick={()=>send("Trouve dans mes ressources la définition la plus importante à connaître et indique la page.")}>🔎 Retrouver une définition</button>
+    <button onClick={()=>send("Donne-moi 3 pièges de QCM basés uniquement sur mes cours.")}>🎯 Pièges de QCM</button>
+    <button onClick={()=>send("Crée-moi une flashcard recto-verso sur le point le plus important du cours.")}>🧠 Créer une flashcard</button>
+   </div>
+   <div className="ai-chat-messages">
+    {messages.map((m,i)=><div key={i} className={"ai-bubble-wrap "+(m.role==="user"?"user":"assistant")}><div className={"ai-bubble "+(m.role==="user"?"user":"assistant")}>{m.content}</div></div>)}
+    {busy&&<div className="ai-bubble-wrap assistant"><div className="ai-bubble assistant typing">RMed réfléchit…</div></div>}
+    <div ref={endRef}/>
+   </div>
+   {error&&<div className="ai-chat-error">{error}</div>}
+   <form className="ai-chat-compose" onSubmit={e=>{e.preventDefault();send()}}>
+    <textarea rows="2" value={input} onChange={e=>setInput(e.target.value)} placeholder="Pose ta question à RMed…" onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}}}/>
+    <button className="primary" disabled={busy||!input.trim()}><Sparkles size={16}/>{busy?"Réponse…":"Envoyer"}</button>
+   </form>
+  </div>
+ </div>
+}
+
 function AIAssistant({selection,onClose}){
  const[q,setQ]=useState("");
  const[answer,setAnswer]=useState("");
@@ -996,7 +1118,7 @@ function SelectionBar({sel,suggestions,onCreate,onUse,onAskAI}){
   <div className="selection-main">
    <span>« {sel.text} »</span>
    <button className="highlight-action done"><Highlighter size={15}/> Surligné</button>
-   <button className="primary" onClick={onCreate}><Sparkles size={15}/> Créer la carte</button>
+   <button className="primary" onClick={onCreate}><Sparkles size={15}/> Créer la carte avec l’IA</button>
    <button className="ai-action" onClick={onAskAI}><Sparkles size={15}/> Assistant IA</button>
   </div>
   {suggestions?.length>0&&<><div className="suggestions-title"><Sparkles size={13}/> Formats proposés par RMed</div>
@@ -1083,10 +1205,44 @@ function Review({rc,revealed,setRevealed,rate,total,i}){
  </div>
 }
 
-function QCM({cards,qcm,setQcm}){
- if(!qcm)return <div className="page"><div className="panel qcm"><small className="eyebrow">QCM</small><h1>Entraînement</h1><p>Transforme tes cartes en petite session de rappel.</p><button onClick={()=>{const c=cards[0];setQcm(c?{q:"Quel est l’élément clé à retenir ?",a:[c.back,"Je ne sais pas encore","Autre réponse"],right:0}:null)}}>{cards.length?"Lancer un QCM":"Créer d’abord des flashcards"}</button></div></div>;
- const [answered,setAnswered]=React.useState(false);
- return <div className="page"><div className="panel qcm"><small className="eyebrow">QCM</small><h1>{qcm.q}</h1><div className="list">{qcm.a.map((a,i)=><button key={i} onClick={()=>setAnswered(true)}>{a}</button>)}</div>{answered&&<p><b>Correction :</b> réponse attendue : {qcm.a[qcm.right]}</p>}<button onClick={()=>setQcm(null)}>Quitter</button></div></div>
+
+function QCM({courses,cards,qcm,setQcm}){
+ const[scope,setScope]=useState("all");
+ const[loading,setLoading]=useState(false);
+ const[error,setError]=useState("");
+ const[session,setSession]=useState(qcm?.questions?qcm:null);
+ useEffect(()=>{setSession(qcm?.questions?qcm:null)},[qcm]);
+ async function generate(){
+  setLoading(true);setError("");
+  try{
+   const currentCourse=scope==="course"?courses[0]:null;
+   const context=await buildResourceContext(courses,{courseId:currentCourse?.id||null,limit:15000});
+   if(!context.trim())throw new Error("Aucune ressource exploitable n’est disponible. Ajoute d’abord un cours ou un PDF.");
+   const data=await callRMedAI({action:"qcm_session",text:"Génère exactement 30 questions de QCM PASS à partir uniquement des ressources ci-dessous.",context});
+   if(!Array.isArray(data?.questions)||data.questions.length!==30)throw new Error("RMed n’a pas généré exactement 30 questions.");
+   const clean={questions:data.questions,index:0,score:0,selected:null,answered:false};
+   setSession(clean);setQcm(clean);
+  }catch(err){setError(err?.message||"Impossible de générer le QCM.")}finally{setLoading(false)}
+ }
+ function choose(i){
+  if(!session||session.answered)return;
+  const current=session.questions[session.index];
+  const next={...session,selected:i,answered:true,score:session.score+(i===current.answerIndex?1:0)};
+  setSession(next);setQcm(next);
+ }
+ function next(){
+  if(!session)return;
+  if(session.index>=29){const done={...session,index:30};setSession(done);setQcm(done);return;}
+  const nextState={...session,index:session.index+1,selected:null,answered:false};
+  setSession(nextState);setQcm(nextState);
+ }
+ function reset(){setSession(null);setQcm(null);setError("")}
+ if(!session)return <div className="page"><div className="panel qcm qcm-setup"><small className="eyebrow">QCM IA</small><h1>30 questions, une par une.</h1><p>RMed fabrique une session à partir uniquement de tes ressources, avec 2 ou 3 propositions maximum par question.</p><div className="qcm-scope"><b>Base du QCM</b><button className={scope==="all"?"chosen":""} onClick={()=>setScope("all")}>Tous mes cours</button><button className={scope==="course"?"chosen":""} disabled={!courses.length} onClick={()=>setScope("course")}>Premier cours</button></div><button className="primary" onClick={generate} disabled={loading}>{loading?<><span className="spinner"/>Génération des 30 questions…</>:"Générer mon QCM avec RMed IA"}</button>{error&&<div className="ai-error">{error}</div>}<div className="qcm-note">1 question à la fois • progression et score conservés pendant la session.</div></div></div>;
+ if(session.index>=30)return <div className="page"><div className="panel qcm qcm-result"><small className="eyebrow">SESSION TERMINÉE</small><h1>QCM terminé 🎉</h1><div className="qcm-score"><strong>{session.score}/30</strong><span>bonnes réponses</span></div><button className="primary" onClick={reset}>Nouvelle session</button></div></div>;
+ const current=session.questions[session.index];
+ const answered=session.answered;
+ const right=session.selected===current.answerIndex;
+ return <div className="page"><div className="title"><div><small>QCM IA</small><h1>Entraînement</h1></div><span className="pill">{session.index+1}/30 • {session.score} point(s)</span></div><div className="qcm-progress"><div style={{width:((session.index+1)/30*100)+"%"}}/></div><div className="panel qcm qcm-session"><small>QUESTION {session.index+1}</small><h2>{current.question}</h2><div className="qcm-choices">{(current.choices||[]).slice(0,3).map((a,i)=><button key={i} className={answered?(i===current.answerIndex?"correct":i===session.selected?"wrong":""):""} disabled={answered} onClick={()=>choose(i)}>{String.fromCharCode(65+i)}. {a}</button>)}</div>{answered&&<div className={"qcm-correction "+(right?"good":"bad")}><b>{right?"✅ Bonne réponse":"❌ Pas tout à fait"}</b><span>{current.explanation||("Réponse correcte : "+current.choices[current.answerIndex])}</span>{!right&&<small>Réponse attendue : {String.fromCharCode(65+current.answerIndex)}. {current.choices[current.answerIndex]}</small>}<button className="primary" onClick={next}>{session.index===29?"Voir le résultat":"Question suivante"}</button></div>}</div></div>;
 }
 
 function HistoryPage({h}){
