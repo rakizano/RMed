@@ -312,7 +312,13 @@ function App(){
  const[aiOpen,setAiOpen]=useState(false);
  const[explainSelection,setExplainSelection]=useState(null);
  const[highlightColor,setHighlightColor]=useState("#ffe66d99");
+ const[showWelcome,setShowWelcome]=useState(true);
  const pdfCache=useRef(new Map());
+
+ useEffect(()=>{
+   const timer=setTimeout(()=>setShowWelcome(false),2600);
+   return()=>clearTimeout(timer);
+ },[]);
 
  useEffect(()=>save("rmed_courses",courses),[courses]);
  useEffect(()=>save("rmed_folders",folders),[folders]);
@@ -543,6 +549,16 @@ function App(){
  }
 
  return <div className="app">
+  {showWelcome&&<div className="rmed-welcome" role="status" aria-live="polite" onClick={()=>setShowWelcome(false)}>
+   <div className="rmed-welcome-orbit orbit-one"></div><div className="rmed-welcome-orbit orbit-two"></div>
+   <div className="rmed-welcome-card">
+    <div className="rmed-welcome-mark">R</div>
+    <span className="rmed-welcome-kicker">RMed • PASS</span>
+    <h1>Bonjour, Raphaël,</h1>
+    <p>avez vous besoin d’affiner vos connaissances déjà excellentes ?</p>
+    <span className="rmed-welcome-hint">Votre espace de révision arrive…</span>
+   </div>
+  </div>}
   <aside>
    <div className="logo">R</div><h2>RMed</h2><small>PASS • révision active</small>
    <Nav icon={<HomeIcon/>} t="Accueil" a={tab==="home"} f={()=>nav("home")}/>
