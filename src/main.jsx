@@ -548,7 +548,7 @@ function App(){
    requestAnimationFrame(()=>document.querySelector(".pdf-reader")?.scrollIntoView({behavior:"smooth",block:"center"}));
  }
 
- return <div className="app">
+ return <div className="app mythic-theme">
   {showWelcome&&<div className="rmed-welcome" role="status" aria-live="polite" onClick={()=>setShowWelcome(false)}>
    <div className="rmed-welcome-orbit orbit-one"></div><div className="rmed-welcome-orbit orbit-two"></div>
    <div className="rmed-welcome-card">
@@ -568,6 +568,12 @@ function App(){
    <Nav icon={<ListChecks/>} t="QCM" a={tab==="qcm"} f={()=>nav("qcm")}/>
    <Nav icon={<Sparkles/>} t="Assistant IA" a={tab==="ai"} f={()=>nav("ai")}/>
    <Nav icon={<History/>} t="Historique" a={tab==="history"} f={()=>nav("history")}/>
+   <section className="myth-panel" aria-label="Panthéon médical">
+    <div className="myth-panel-kicker">REPÈRES</div>
+    <div className="myth-figure"><span className="myth-figure-medallion">⚕</span><div><strong>Asclépios</strong><small>La médecine comme fil conducteur</small></div></div>
+    <a href="https://fr.wikipedia.org/wiki/Serment_d%27Hippocrate" target="_blank" rel="noreferrer" className="myth-link"><span>✦</span> Serment d’Hippocrate <ExternalLink size={12}/></a>
+    <a href="https://fr.wikipedia.org/wiki/Hygie" target="_blank" rel="noreferrer" className="myth-link"><span>◌</span> Hygie · prévention <ExternalLink size={12}/></a>
+   </section>
    <button className="dog" onClick={()=>nav("ai")} title="Ouvrir l’assistant IA">🐶<span>Parler à RMed</span></button>
   </aside>
 
@@ -594,7 +600,7 @@ function App(){
 function Nav({icon,t,a,f}){return <button className={a?"nav active":"nav"} onClick={f}>{icon}<span>{t}</span></button>}
 function Home({cards,due,courses,nav,open}){const palette=["yellow","lavender","mint","coral"];const visuals=["paper","cells","books","brain"];const acquired=cards.filter(c=>c.level==="perfect"||c.level==="good").length;const reviewPct=cards.length?Math.round((acquired/cards.length)*100):0;const progressFor=c=>Math.min(100,Math.max(8,(cards.filter(x=>x.courseId===c.id).length/Math.max(1,cards.length))*100));return <div className="page home-redesign">
  <div className="home-top">
-  <div><div className="library-kicker">RMed <span>•</span> ESPACE D’ÉTUDE</div><h1>Bienvenue dans ton studio 🫶</h1><p className="home-caption">Ici, tu lis, tu comprends, tu transformes et tu révises.</p></div>
+  <div><div className="library-kicker">RMed <span>•</span> ACADÉMIE MÉDICALE</div><h1>Bienvenue à l’académie ⚕</h1><p className="home-caption">Apprendre avec rigueur, mémoriser avec méthode, progresser avec constance.</p></div>
   <button className="round-search" onClick={()=>nav("cards")} title="Rechercher"><Search size={18}/></button>
  </div>
  <section className="hero-studio">
@@ -634,6 +640,15 @@ function Home({cards,due,courses,nav,open}){const palette=["yellow","lavender","
   <div className="progress-board">
    <div className="progress-board-left"><div className="progress-ring" style={{"--progress":reviewPct+"%"}}><strong>{reviewPct}</strong><span>%</span></div><div><b>Ton terrain de jeu grandit.</b><p>{acquired} cartes bien acquises sur {cards.length || 0}. Continue doucement, mais régulièrement.</p></div></div>
    <div className="progress-spark"><span>↗</span><b>Rythme</b><small>{due ? "Quelques cartes t’attendent." : "Tout est à jour 🎉"}</small></div>
+  </div>
+ </section>
+
+ <section className="pantheon-section">
+  <div className="section-heading-block"><div><span>INSPIRATIONS</span><h2>Le panthéon de ta mémoire</h2></div><a href="https://fr.wikipedia.org/wiki/Ascl%C3%A9pios" target="_blank" rel="noreferrer">Découvrir <ExternalLink size={13}/></a></div>
+  <div className="pantheon-grid">
+   <a className="pantheon-card pantheon-asclepios" href="https://fr.wikipedia.org/wiki/Ascl%C3%A9pios" target="_blank" rel="noreferrer"><span className="pantheon-symbol">⚕</span><div><small>GUÉRIR</small><b>Asclépios</b><p>La médecine, la précision et le soin.</p></div><ExternalLink size={14}/></a>
+   <a className="pantheon-card pantheon-athena" href="https://fr.wikipedia.org/wiki/Ath%C3%A9na" target="_blank" rel="noreferrer"><span className="pantheon-symbol">◈</span><div><small>RAISONNER</small><b>Athéna</b><p>La stratégie, le discernement et la méthode.</p></div><ExternalLink size={14}/></a>
+   <a className="pantheon-card pantheon-hygie" href="https://fr.wikipedia.org/wiki/Hygie" target="_blank" rel="noreferrer"><span className="pantheon-symbol">✦</span><div><small>PRÉVENIR</small><b>Hygie</b><p>La prévention et les habitudes qui protègent.</p></div><ExternalLink size={14}/></a>
   </div>
  </section>
 
