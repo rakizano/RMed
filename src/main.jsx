@@ -316,7 +316,7 @@ function App(){
  const pdfCache=useRef(new Map());
 
  useEffect(()=>{
-   const timer=setTimeout(()=>setShowWelcome(false),2600);
+   const timer=setTimeout(()=>setShowWelcome(false),4200);
    return()=>clearTimeout(timer);
  },[]);
 
