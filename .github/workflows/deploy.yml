@@ -28,10 +28,16 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm install --no-audit --no-fund --no-package-lock
 
       - name: Build
         run: npm run build
+
+      - name: Verify build output
+        run: |
+          test -f dist/index.html
+          test -s dist/index.html
+          echo "✅ RMed build verified: dist/index.html exists and is not empty."
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
