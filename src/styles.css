@@ -1693,3 +1693,110 @@ header{height:70px;background:rgba(255,255,255,.82);border-bottom:1px solid #e9e
 @keyframes rmedWelcomeDrift{to{transform:translate(-18px,22px) scale(1.06)}}
 @media(max-width:620px){.rmed-welcome-card{padding:37px 25px 34px;border-radius:28px}.rmed-welcome-mark{width:48px;height:48px;border-radius:15px}.rmed-welcome-hint{margin-top:20px}.rmed-welcome-orbit{display:none}}
 @media(prefers-reduced-motion:reduce){.rmed-welcome,.rmed-welcome-card,.rmed-welcome:before{animation:none}.rmed-welcome{animation:rmedWelcomeOut .01s linear 1.2s forwards}}
+
+/* ===== RMed Mythos — complete visual direction ===== */
+.mythic-theme{
+ --myth-ivory:#f3eee3;--myth-paper:#fbf8f0;--myth-navy:#183244;--myth-ink:#20201e;
+ --myth-bronze:#9b6d3b;--myth-gold:#c7a35d;--myth-sage:#687765;--myth-lilac:#b7b5d8;
+ background:
+   radial-gradient(circle at 84% 8%,rgba(199,163,93,.14),transparent 19rem),
+   radial-gradient(circle at 4% 64%,rgba(104,119,101,.12),transparent 22rem),
+   var(--myth-ivory)!important;color:var(--myth-ink)!important;
+}
+.mythic-theme:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.32;z-index:0;background-image:
+ linear-gradient(90deg,rgba(24,50,68,.025) 1px,transparent 1px),
+ linear-gradient(rgba(24,50,68,.02) 1px,transparent 1px);background-size:28px 28px}
+.mythic-theme aside{
+ background:linear-gradient(180deg,#f8f4ea 0%,#eee7d9 100%)!important;
+ border-right:1px solid rgba(155,109,59,.22)!important;
+ box-shadow:8px 0 30px rgba(53,44,31,.07);
+}
+.mythic-theme aside:after{content:"";position:absolute;left:14px;right:14px;bottom:86px;height:1px;background:linear-gradient(90deg,transparent,rgba(155,109,59,.45),transparent)}
+.mythic-theme .logo{background:var(--myth-navy)!important;border-radius:15px!important;box-shadow:0 8px 18px rgba(24,50,68,.18)}
+.mythic-theme .app aside h2{font-family:Georgia,"Times New Roman",serif!important;letter-spacing:-.02em;color:var(--myth-navy)}
+.mythic-theme .app aside>small{color:#87775f!important}
+.mythic-theme .nav{color:#6b6b67!important;border-radius:13px!important}
+.mythic-theme .nav:hover{background:rgba(199,163,93,.10)!important;color:var(--myth-navy)!important}
+.mythic-theme .nav.active{background:var(--myth-navy)!important;color:#f8f4ea!important;box-shadow:0 8px 18px rgba(24,50,68,.13)}
+.myth-panel{margin-top:20px;padding:13px;border:1px solid rgba(155,109,59,.19);border-radius:18px;background:rgba(255,255,255,.48);box-shadow:inset 0 1px 0 rgba(255,255,255,.75)}
+.myth-panel-kicker{font-size:8px;font-weight:950;letter-spacing:.16em;color:var(--myth-bronze);margin-bottom:9px}
+.myth-figure{display:flex;gap:9px;align-items:center}
+.myth-figure-medallion{width:33px;height:33px;border-radius:50%;display:grid;place-items:center;background:var(--myth-gold);color:var(--myth-navy);font-size:17px;box-shadow:0 4px 10px rgba(155,109,59,.2)}
+.myth-figure strong,.myth-figure small{display:block}.myth-figure strong{font:800 12px/1 Georgia,"Times New Roman",serif;color:var(--myth-navy)}.myth-figure small{font-size:8px;line-height:1.35;color:#807b70;margin-top:2px}
+.myth-link{display:flex;align-items:center;gap:7px;padding:8px 4px 2px;text-decoration:none;color:#5f625e;font-size:8px;font-weight:800}
+.myth-link span{color:var(--myth-bronze)}.myth-link svg{margin-left:auto;opacity:.45}.myth-link:hover{color:var(--myth-navy)}
+.mythic-theme .dog{background:#f7f2e8!important;border:1px solid rgba(155,109,59,.18)!important}
+.mythic-theme main{position:relative;z-index:1}
+.mythic-theme header{
+ background:rgba(248,244,234,.92)!important;border-bottom:1px solid rgba(155,109,59,.18)!important;
+ backdrop-filter:blur(16px);
+}
+.mythic-theme header:after{content:"";position:absolute;left:28px;right:28px;bottom:-1px;height:1px;background:linear-gradient(90deg,transparent,rgba(199,163,93,.42),transparent)}
+.mythic-theme .search{background:#eee8dc!important;color:#837b6f!important;border:1px solid rgba(155,109,59,.09)}
+.mythic-theme .avatar{background:var(--myth-navy)!important;color:#fff!important}
+.mythic-theme .page{max-width:1320px}
+.mythic-theme .home-redesign:before{width:320px;height:320px;background:rgba(199,163,93,.13);filter:blur(0);top:-110px;right:-110px}
+.mythic-theme .home-redesign:after{width:240px;height:240px;background:rgba(104,119,101,.11);filter:blur(0);left:-120px;top:620px}
+.mythic-theme .library-kicker{color:var(--myth-bronze)!important}
+.mythic-theme .library-kicker span{color:#b9ae9c!important}
+.mythic-theme .home-top h1{font-family:Georgia,"Times New Roman",serif!important;color:var(--myth-navy)!important;letter-spacing:-.045em}
+.mythic-theme .home-caption{color:#716f69!important}
+.mythic-theme .round-search{background:#eee8dc!important;color:var(--myth-navy)!important}
+.mythic-theme .hero-studio{
+ background:
+  radial-gradient(circle at 80% 20%,rgba(199,163,93,.19),transparent 10rem),
+  linear-gradient(135deg,var(--myth-navy),#254a61 75%,#52675f)!important;
+ border:1px solid rgba(199,163,93,.32)!important;border-radius:30px!important;
+ box-shadow:0 22px 50px rgba(24,50,68,.25)!important;
+}
+.mythic-theme .hero-studio:before{background:rgba(247,239,220,.09)!important}
+.mythic-theme .hero-studio:after{background:var(--myth-gold)!important}
+.mythic-theme .hero-eyebrow{color:#e9dbc0!important}
+.mythic-theme .hero-dot{background:var(--myth-gold)!important}
+.mythic-theme .hero-copy h2{font-family:Georgia,"Times New Roman",serif!important;color:#f7f0e4!important}
+.mythic-theme .hero-copy h2 em{color:#dfc487!important}
+.mythic-theme .hero-copy p{color:#d6d6cf!important}
+.mythic-theme .hero-main-action{background:#f5efe4!important;color:var(--myth-navy)!important}
+.mythic-theme .hero-soft-action{background:rgba(255,255,255,.10)!important;color:#fff!important;border:1px solid rgba(255,255,255,.2)!important}
+.mythic-theme .orbit{border-color:rgba(230,211,168,.28)!important}
+.mythic-theme .float-card{background:#f8f3e9!important;color:var(--myth-navy)!important;border:1px solid rgba(155,109,59,.18)}
+.mythic-theme .mascot-face{background:#ebe4d5!important;border:2px solid rgba(155,109,59,.25)}
+.mythic-theme .mascot-body,.mythic-theme .mascot-ear{background:var(--myth-bronze)!important}
+.mythic-theme .home-stats .stat-chip{border:1px solid rgba(155,109,59,.10)!important}
+.mythic-theme .chip-yellow{background:#ddc47d!important}.mythic-theme .chip-lav{background:#c5c2df!important}.mythic-theme .chip-mint{background:#bdc8bc!important}.mythic-theme .chip-coral{background:#d7b49c!important}
+.mythic-theme .section-heading-block h2,.mythic-theme .home-section h2{font-family:Georgia,"Times New Roman",serif!important;color:var(--myth-navy)!important}
+.mythic-theme .section-heading-block>div>span,.mythic-theme .micro-label{color:var(--myth-bronze)!important}
+.mythic-theme .section-heading-block>button,.mythic-theme .section-line>button{background:#f7f1e6!important;color:var(--myth-navy)!important;border:1px solid rgba(155,109,59,.12)}
+.mythic-theme .source-grid-premium .source-card{border:1px solid rgba(155,109,59,.13)!important;box-shadow:0 12px 30px rgba(53,44,31,.08)!important}
+.mythic-theme .source-grid-premium .yellow{background:#e6d28f!important}.mythic-theme .source-grid-premium .lavender{background:#c3c2df!important}.mythic-theme .source-grid-premium .mint{background:#c7d0c3!important}.mythic-theme .source-grid-premium .coral{background:#d9baa0!important}
+.mythic-theme .source-grid-premium .source-card b{font-family:Georgia,"Times New Roman",serif!important;color:var(--myth-navy)!important}
+.mythic-theme .source-progress span{background:var(--myth-navy)!important}
+.mythic-theme .add-source-premium{background:#f9f5ec!important;color:var(--myth-navy)!important;border:1px solid rgba(155,109,59,.12)!important}
+.mythic-theme .add-source-badge{background:var(--myth-navy)!important}
+.mythic-theme .progress-board{background:#f9f5ec!important;border:1px solid rgba(155,109,59,.12)!important}
+.mythic-theme .progress-ring{background:conic-gradient(var(--myth-navy) 0 var(--progress,0%),#e3ddd1 var(--progress,0%) 100%)!important}
+.mythic-theme .progress-spark{background:#c7d0c3!important}
+.pantheon-section{margin:28px 0 30px;position:relative}
+.pantheon-section:before{content:"✦";position:absolute;right:14px;top:-9px;color:var(--myth-gold);font-size:14px}
+.pantheon-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.pantheon-card{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;padding:16px 14px;border-radius:21px;text-decoration:none;border:1px solid rgba(155,109,59,.14);box-shadow:0 10px 24px rgba(53,44,31,.06);transition:transform .2s ease,box-shadow .2s ease}
+.pantheon-card:hover{transform:translateY(-3px);box-shadow:0 16px 30px rgba(53,44,31,.10)}
+.pantheon-asclepios{background:#d9c99b}.pantheon-athena{background:#c3c2df}.pantheon-hygie{background:#c6d0c1}
+.pantheon-symbol{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.48);color:var(--myth-navy);font:900 21px Georgia,"Times New Roman",serif}
+.pantheon-card small,.pantheon-card b,.pantheon-card p{display:block}.pantheon-card small{font-size:7px;font-weight:950;letter-spacing:.12em;color:#6f675b}.pantheon-card b{font:900 18px/1.1 Georgia,"Times New Roman",serif;color:var(--myth-navy);margin-top:3px}.pantheon-card p{margin:4px 0 0;font-size:9px;line-height:1.35;color:#65645e}.pantheon-card>svg{color:var(--myth-navy);opacity:.45}
+.mythic-theme .continue-card{background:#f9f5ec!important;border:1px solid rgba(155,109,59,.10)!important}
+.mythic-theme .continue-main>b{font-family:Georgia,"Times New Roman",serif!important;color:var(--myth-navy)!important}
+.mythic-theme .cv-yellow{background:#ddc47d!important}.mythic-theme .cv-lavender{background:#c3c2df!important}.mythic-theme .cv-mint{background:#c7d0c3!important}.mythic-theme .cv-coral{background:#d9baa0!important}
+.mythic-theme .premium-actions button{background:#f9f5ec!important;border:1px solid rgba(155,109,59,.10)!important}
+.mythic-theme .ai-yellow{background:#ddc47d!important}.mythic-theme .ai-lav{background:#c3c2df!important}.mythic-theme .ai-mint{background:#c7d0c3!important}.mythic-theme .ai-coral{background:#d9baa0!important}
+.mythic-theme .title h1{font-family:Georgia,"Times New Roman",serif!important;color:var(--myth-navy)!important}
+.mythic-theme .eyebrow,.mythic-theme .title small{color:var(--myth-bronze)!important}
+.mythic-theme .primary,.mythic-theme .upload{background:var(--myth-navy)!important;color:#fff!important}
+.mythic-theme .reader,.mythic-theme .panel,.mythic-theme .cardrow,.mythic-theme .history,.mythic-theme .reviewcard,.mythic-theme .qcm,.mythic-theme .modal{background:#f9f5ec!important;border-color:rgba(155,109,59,.13)!important}
+.mythic-theme .courseSide{background:#eee7d9!important}.mythic-theme .courseSide button.selected{background:var(--myth-navy)!important;color:#fff!important}
+.mythic-theme .pdf-reader{background:#e9e2d6!important}.mythic-theme .pdf-toolbar{background:#f9f5ec!important;border-bottom-color:rgba(155,109,59,.13)!important}.mythic-theme .pdf-stage{background:#e4ddd0!important}
+.mythic-theme .pill{background:#d8ceb7!important;color:var(--myth-navy)!important}
+.mythic-theme .selection-bar{background:#f9f5ec!important;border-top-color:rgba(155,109,59,.13)!important}
+.mythic-theme .reviewcard{box-shadow:0 14px 30px rgba(53,44,31,.11)!important}
+@media(max-width:900px){.pantheon-grid{grid-template-columns:1fr}.myth-panel{display:none}}
+@media(max-width:620px){.pantheon-card{padding:14px 12px}.pantheon-symbol{width:40px;height:40px}.pantheon-card b{font-size:16px}}
