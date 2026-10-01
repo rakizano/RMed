@@ -1800,3 +1800,13 @@ header{height:70px;background:rgba(255,255,255,.82);border-bottom:1px solid #e9e
 .mythic-theme .reviewcard{box-shadow:0 14px 30px rgba(53,44,31,.11)!important}
 @media(max-width:900px){.pantheon-grid{grid-template-columns:1fr}.myth-panel{display:none}}
 @media(max-width:620px){.pantheon-card{padding:14px 12px}.pantheon-symbol{width:40px;height:40px}.pantheon-card b{font-size:16px}}
+
+.mythic-theme .rmed-welcome{background:radial-gradient(circle at 50% 42%,rgba(255,250,239,.98),rgba(238,231,217,.98))!important}
+.mythic-theme .rmed-welcome:before{background:rgba(24,50,68,.13)!important}
+.mythic-theme .rmed-welcome:after{background:rgba(199,163,93,.28)!important}
+.mythic-theme .rmed-welcome-card{background:rgba(251,248,240,.92)!important;border-color:rgba(155,109,59,.20)!important;box-shadow:0 30px 90px rgba(53,44,31,.17)!important}
+.mythic-theme .rmed-welcome-mark{background:var(--myth-navy)!important;color:#f8f1e3!important}
+.mythic-theme .rmed-welcome-kicker{color:var(--myth-bronze)!important}
+.mythic-theme .rmed-welcome-card h1{font-family:Georgia,"Times New Roman",serif!important;color:var(--myth-navy)!important}
+.mythic-theme .rmed-welcome-card p{color:#4e514f!important}
+.mythic-theme .rmed-welcome-hint{color:#8f8067!important}
