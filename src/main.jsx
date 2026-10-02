@@ -462,34 +462,75 @@ function App(){
  
  function buildInstantFlashcard(text){
  const clean=String(text||"").replace(/\s+/g," ").trim();
- if(!clean)return {front:"",back:""};
- const firstSentence=(clean.match(/^(.{24,220}?)(?:[.!?]|$)/)||[])[1]?.trim()||clean.slice(0,180);
- const comma=firstSentence.indexOf(",");
- const subject=comma>12?firstSentence.slice(0,comma).trim():"ce passage";
- let front;
- if(/\b(est|sont|correspond|permet|permettent|désigne|définit|constitue|comprend|se compose)\b/i.test(firstSentence)){
-   front="Que faut-il retenir concernant "+subject+" ?";
- }else{
-   front="Quel est le point essentiel de ce passage ?";
+ if(!clean)return {front:"",back:"",type:"basic"};
+ const answer=clean.replace(/\s*\(cf\.?\s*[^)]*\)/gi,"").replace(/\s+/g," ").trim();
+ const sentence=(answer.match(/^(.+?[.!?])(?:\s|$)/)||[])[1]?.trim()||answer;
+
+ // Génération locale : instantanée, déterministe et ancrée dans le fait sélectionné.
+ // L'IA reste optionnelle : elle peut améliorer une carte existante, mais ne doit jamais
+ // être nécessaire pour obtenir une question exploitable.
+ const phaseMatch=sentence.match(/^(.{2,110}?)\s+est\s+une des\s+(\d+)\s+phases?\s+(?:du|de la)\s+(.{4,180})$/i);
+ const definition=sentence.match(/^(.{2,100}?)\s+(?:est|sont|désigne|correspond à|se définit comme)\s+(.{4,260})$/i);
+ const role=sentence.match(/^(.{2,120}?)\s+(?:permet|permettent|a pour (?:but|rôle)|ont pour (?:but|rôle)|sert à|servent à)\s+(.{4,260})$/i);
+ const composition=sentence.match(/^(.{2,110}?)\s+(?:est|sont)\s+(?:constitué|constitués|constituée|constituées)\s+de\s+(.{4,260})$/i)
+   || sentence.match(/^(.{2,110}?)\s+se compose(?:nt)?\s+de\s+(.{4,260})$/i)
+   || sentence.match(/^(.{2,110}?)\s+comprend(?:nent)?\s+(.{4,260})$/i);
+ const characteristic=sentence.match(/^(.{2,110}?)\s+(?:est|sont)\s+caractérisé(?:e|s|es)?\s+par\s+(.{4,260})$/i);
+ const location=sentence.match(/^(.{2,110}?)\s+(?:se situe|est localisé(?:e)?|sont localisé(?:e|es)?)\s+(?:au|à|dans|sur|près de|entre)\s+(.{4,260})$/i);
+
+ if(phaseMatch){
+   return {
+     type:"basic",
+     front:"Dans le cycle cellulaire, combien de phases sont décrites et quelle phase correspond à "+phaseMatch[1].trim()+" ?",
+     back:answer
+   };
  }
- return {front,back:clean};
+ if(definition){
+   const subject=definition[1].trim().replace(/^(le|la|les|un|une|l')\s+/i,"");
+   return {type:"concept",front:"Qu'est-ce que "+subject+" ?",back:answer};
+ }
+ if(role){
+   return {type:"basic",front:"Quel est le rôle de "+role[1].trim()+" ?",back:answer};
+ }
+ if(composition){
+   return {type:"basic",front:"De quoi "+composition[1].trim()+" est-il constitué / que comprend-il ?",back:answer};
+ }
+ if(characteristic){
+   return {type:"basic",front:"Par quoi "+characteristic[1].trim()+" est-il caractérisé ?",back:answer};
+ }
+ if(location){
+   return {type:"basic",front:"Où se situe "+location[1].trim()+" ?",back:answer};
+ }
+
+ const measured=sentence.match(/\b\d+(?:[.,]\d+)?\s*(?:%|jours?|heures?|minutes?|nm|µm|mm|cm|mL|L|mg|g|kg|kDa)\b/i);
+ if(measured){
+   const cloze=sentence.replace(measured[0],"_____");
+   if(cloze!==sentence && cloze.length>25)return {type:"cloze",front:cloze+" ?",back:answer};
+ }
+
+ const subject=(sentence.match(/^([A-ZÀ-ÖØ-Þ][^,;:.!?]{2,90})\s+/)||[])[1]?.trim();
+ if(subject)return {type:"basic",front:"Quelle information précise faut-il connaître sur "+subject+" ?",back:answer};
+ return {type:"basic",front:"Quelle information précise faut-il connaître sur cette notion ?",back:answer};
 }
 
  async function openCreator(selection=sel){
    if(!selection?.text?.trim())return;
    const hId=selection.highlightId||persistSelection(selection,highlightColor);
    const instant=buildInstantFlashcard(selection.text);
-   setDraft({type:"basic",front:instant.front,back:instant.back,images:[],highlightId:hId,source:selection.text,page:pageNumber,aiGenerating:true,aiError:""});
+   setDraft({
+     type:instant.type||"basic",
+     front:instant.front,
+     back:instant.back,
+     images:[],
+     highlightId:hId,
+     source:selection.text,
+     page:pageNumber,
+     aiGenerating:false,
+     aiError:"",
+     aiUsed:false
+   });
    setModal(true);
-   try{
-    // Chemin rapide : le passage sélectionné suffit pour lancer l'IA.
-    // On évite de bloquer l'ouverture en extrayant tout le PDF au préalable.
-    const data=await callRMedAI({action:"flashcard",text:selection.text,context:selection.text});
-    if(data?.front&&data?.back)setDraft(d=>d?{...d,type:data.type||"basic",front:data.front,back:data.back,aiGenerating:false,aiError:""}:d);
-    else throw new Error("Réponse IA incomplète.");
-   }catch(err){
-    setDraft(d=>d?{...d,aiGenerating:false,aiError:err?.message||"IA indisponible"}:d);
-   }
+ }
  }
  function persistSelection(selection,color){
    if(!selection?.text?.trim())return null;
@@ -1205,7 +1246,7 @@ function CardModal({draft,setDraft,onClose,onSave}){
   setBusy(true);setDraft(x=>x?{...x,aiGenerating:true,aiError:""}:x);
   try{
    const data=await callRMedAI({action:"flashcard",text:draft.source,context:draft.source});
-   if(data?.front&&data?.back)setDraft(x=>x?{...x,type:data.type||"basic",front:data.front,back:data.back,aiGenerating:false,aiError:""}:x);
+   if(data?.front&&data?.back)setDraft(x=>x?{...x,type:data.type||"basic",front:data.front,back:data.back,aiGenerating:false,aiError:"",aiUsed:true}:x);
    else throw new Error("Réponse IA incomplète.");
   }catch(err){setDraft(x=>x?{...x,aiGenerating:false,aiError:err?.message||"IA indisponible"}:x)}
   finally{setBusy(false)}
@@ -1214,7 +1255,7 @@ function CardModal({draft,setDraft,onClose,onSave}){
   <div className="modal compact-card-modal">
    <div className="mh"><div><small className="eyebrow">FLASHCARD</small><h2>{draft?.editingId?"Modifier la carte":"Créer la flashcard"}</h2></div><button onClick={onClose}><X size={18}/></button></div>
    <div className="source"><small>Source • page {draft?.page||"—"}</small><p>{draft?.source}</p></div>
-   {!draft?.editingId&&<div className="ai-generate-row"><div><b>✨ RMed IA</b><small>{draft?.aiGenerating?"Création rapide de la question et de la réponse.":"Tu peux modifier les deux côtés."}</small></div><button className="ai-action" onClick={regenerate} disabled={draft?.aiGenerating||busy}>{draft?.aiGenerating||busy?"Création…":"Régénérer"}</button></div>}
+   {!draft?.editingId&&<div className="ai-generate-row"><div><b>✨ Carte intelligente</b><small>{draft?.aiGenerating?"RMed améliore la formulation…":draft?.aiUsed?"Carte améliorée avec l’IA.":"Question construite directement à partir du passage sélectionné. L’IA est facultative."}</small></div><button className="ai-action" onClick={regenerate} disabled={draft?.aiGenerating||busy}>{draft?.aiGenerating||busy?"Amélioration…":draft?.aiUsed?"Améliorer à nouveau":"✨ Améliorer avec IA"}</button></div>}
    {draft?.aiError&&<div className="ai-error">{draft.aiError}</div>}
    <label>Recto<textarea rows="3" value={draft?.front||""} onChange={e=>setDraft(x=>({...x,front:e.target.value,aiError:""}))} placeholder="Question"/></label>
    <label>Verso<textarea rows="4" value={draft?.back||""} onChange={e=>setDraft(x=>({...x,back:e.target.value,aiError:""}))} placeholder="Réponse"/></label>
