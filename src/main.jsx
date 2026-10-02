@@ -469,7 +469,7 @@ function App(){
  // Génération locale : instantanée, déterministe et ancrée dans le fait sélectionné.
  // L'IA reste optionnelle : elle peut améliorer une carte existante, mais ne doit jamais
  // être nécessaire pour obtenir une question exploitable.
- const phaseMatch=sentence.match(/^(.{2,110}?)\s+est\s+une des\s+(\d+)\s+phases?\s+(?:du|de la)\s+(.{4,180})$/i);
+ const phaseMatch=sentence.match(/^(.{2,110}?)\s+est\s+une des\s+(\d+)\s+phases?\s+(?:du|de la)\s+(.{4,180}?)(?:\s*\(.*)?$/i);
  const definition=sentence.match(/^(.{2,100}?)\s+(?:est|sont|désigne|correspond à|se définit comme)\s+(.{4,260})$/i);
  const role=sentence.match(/^(.{2,120}?)\s+(?:permet|permettent|a pour (?:but|rôle)|ont pour (?:but|rôle)|sert à|servent à)\s+(.{4,260})$/i);
  const composition=sentence.match(/^(.{2,110}?)\s+(?:est|sont)\s+(?:constitué|constitués|constituée|constituées)\s+de\s+(.{4,260})$/i)
@@ -530,7 +530,6 @@ function App(){
      aiUsed:false
    });
    setModal(true);
- }
  }
  function persistSelection(selection,color){
    if(!selection?.text?.trim())return null;
@@ -634,7 +633,7 @@ function App(){
   {moveCourseId&&<MoveCourseModal course={courses.find(c=>c.id===moveCourseId)||course} folders={folders} onMove={folderId=>moveCourseToFolder(moveCourseId,folderId)} onClose={()=>setMoveCourseId(null)}/>}
   {aiOpen&&<AIAssistant selection={sel} courses={courses} course={course} onClose={()=>setAiOpen(false)}/>} 
   {explainSelection&&<ExplainSelectionModal selection={explainSelection} courses={courses} course={course} getContext={getSelectionAIContext} onClose={()=>setExplainSelection(null)}/>}
-  {modal&&<CardDock draft={draft} setDraft={setDraft} onClose={()=>{setModal(false);setDraft(null)}} onSave={saveCard}/>}
+  {modal&&<CardDock course={course} draft={draft} setDraft={setDraft} onClose={()=>{setModal(false);setDraft(null)}} onSave={saveCard}/>}
  </div>
 }
 
@@ -1144,7 +1143,7 @@ function ExplainSelectionModal({selection,course,getContext,onClose}){
 }
 
 
-function CardDock({draft,setDraft,onClose,onSave}){
+function CardDock({draft,setDraft,onClose,onSave,course}){
  const[busy,setBusy]=useState(false);
  const[imageBusy,setImageBusy]=useState(false);
 
@@ -1156,18 +1155,23 @@ function CardDock({draft,setDraft,onClose,onSave}){
    const added=[];
    for(const file of files.slice(0,6))added.push(await prepareCardImage(file));
    setDraft(x=>x?{...x,images:[...(x.images||[]),...added].slice(0,6)}:x);
-  }catch(err){
-   setDraft(x=>x?{...x,aiError:err?.message||"Impossible d’ajouter l’image."}:x);
-  }finally{setImageBusy(false)}
+  }catch(err){setDraft(x=>x?{...x,aiError:err?.message||"Impossible d’ajouter l’image."}:x)}
+  finally{setImageBusy(false)}
  }
  function removeImage(index){setDraft(x=>x?{...x,images:(x.images||[]).filter((_,i)=>i!==index)}:x);}
  async function regenerate(){
   if(!draft?.source||busy)return;
-  setBusy(true);setDraft(x=>x?{...x,aiGenerating:true,aiError:""}:x);
+  setBusy(true);
+  setDraft(x=>x?{...x,aiGenerating:true,aiError:""}:x);
   try{
-   const data=await callRMedAI({action:"flashcard",text:draft.source,context:draft.source});
+   const resource=await retrieveResourceContext([course],{courseId:course?.id||null,query:draft.source,limit:9000,maxChunks:6});
+   const data=await callRMedAI({
+    action:"flashcard",
+    text:draft.source,
+    context:"PASSAGE SÉLECTIONNÉ :\n"+draft.source+"\n\nCONTEXTE DU COURS :\n"+resource
+   });
    if(data?.front&&data?.back){
-    setDraft(x=>x?{...x,type:data.type||"basic",front:data.front,back:data.back,aiGenerating:false,aiError:""}:x);
+    setDraft(x=>x?{...x,type:data.type||"basic",front:data.front,back:data.back,aiGenerating:false,aiError:"",aiUsed:true}:x);
    }else throw new Error("Réponse IA incomplète.");
   }catch(err){
    setDraft(x=>x?{...x,aiGenerating:false,aiError:err?.message||"IA indisponible"}:x);
@@ -1189,11 +1193,11 @@ function CardDock({draft,setDraft,onClose,onSave}){
 
   <div className="card-dock-ai">
    <div className="card-dock-ai-copy">
-    <div><span className="ai-live-dot"/> <b>ChatGPT / IA</b></div>
-    <small>{draft?.aiGenerating?"Je transforme ta sélection en vraie carte…":"Carte prête — vérifie-la puis ajoute-la."}</small>
+    <div><span className="ai-live-dot"/> <b>{draft?.aiUsed?"Carte améliorée avec IA":"Carte intelligente"}</b></div>
+    <small>{draft?.aiGenerating?"RMed améliore la formulation…":"Question construite à partir du passage. Pas besoin d’IA pour commencer."}</small>
    </div>
-   <button onClick={regenerate} disabled={draft?.aiGenerating||busy}>
-    {draft?.aiGenerating||busy?"…":"↻"}
+   <button onClick={regenerate} disabled={draft?.aiGenerating||busy} title="Améliorer avec l’IA">
+    {draft?.aiGenerating||busy?"…":"✨"}
    </button>
   </div>
 
@@ -1201,10 +1205,10 @@ function CardDock({draft,setDraft,onClose,onSave}){
 
   <div className="card-dock-fields">
    <label><span>RECTO <em>{draft?.type==="cloze"?"TEXTE À TROUS":draft?.type==="concept"?"CONCEPT":"QUESTION"}</em></span>
-    <textarea value={draft?.front||""} onChange={e=>setDraft(x=>({...x,front:e.target.value,aiError:""}))} placeholder="Question"/>
+    <textarea value={draft?.front||""} onChange={e=>setDraft(x=>({...x,front:e.target.value,aiError:""}))} placeholder="Question ancrée dans le cours…"/>
    </label>
-   <label><span>VERSO</span>
-    <textarea value={draft?.back||""} onChange={e=>setDraft(x=>({...x,back:e.target.value,aiError:""}))} placeholder="Réponse"/>
+   <label><span>VERSO <em>RÉPONSE SOURCE</em></span>
+    <textarea value={draft?.back||""} onChange={e=>setDraft(x=>({...x,back:e.target.value,aiError:""}))} placeholder="Réponse fidèle au passage sélectionné…"/>
    </label>
   </div>
 
@@ -1222,7 +1226,6 @@ function CardDock({draft,setDraft,onClose,onSave}){
   </div>
  </aside>
 }
-
 function CardModal({draft,setDraft,onClose,onSave}){
  const[busy,setBusy]=useState(false);
  const[imageBusy,setImageBusy]=useState(false);
